@@ -20,10 +20,7 @@ import sqlalchemy.dialects.postgresql
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-uri = os.getenv('POSTGRES_URL')
-app.config['SQLALCHEMY_DATABASE_URI'] = uri
-if uri and uri.startswith("postgres://"):
-    uri = uri.replace("postgres://", "postgresql://")
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://default:8iXjK9CPdhev@ep-polished-salad-a1bgg5k2.ap-southeast-1.aws.neon.tech:5432/verceldb?sslmode=require"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 #new
