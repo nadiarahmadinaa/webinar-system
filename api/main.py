@@ -14,7 +14,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import timedelta
-
+import psycopg2
+import sqlalchemy.dialects.postgresql
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
