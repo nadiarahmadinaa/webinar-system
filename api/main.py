@@ -19,7 +19,7 @@ from datetime import timedelta
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///system.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('POSTGRES_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 #new
 app.config['UPLOAD_FOLDER'] = 'uploads/'  # Folder to store uploaded files
