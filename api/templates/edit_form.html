@@ -1,0 +1,101 @@
+{% extends "welcome.html" %}
+
+{% block title %}Edit Form{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Form</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-r from-blue-200 to-green-100 min-h-screen flex items-center justify-center px-8">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-lg mx-auto">
+        <h1 class="text-2xl font-bold mb-6 text-center text-gray-700">Edit {{ form_type }} Form</h1>
+        <form action="{{ url_for('edit_form', form_id=form.id) }}" method="post" class="space-y-4">
+            <div>
+                <label for="name" class="block text-gray-700">Form Name:</label>
+                <input type="text" id="name" name="name" value="{{ form.name }}" required class="mt-1 p-2 w-full border rounded-md">
+            </div>
+            <div id="fields-container">
+                <label for="name" class="block text-gray-700">Field Names & Types:</label>
+                <div class="flex space-x-2 mb-2">
+                    <input type="text" name="fields[0][label]" value="Name" readonly class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed">
+                    <select name="fields[0][type]" class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed" disabled>
+                        <option value="text">Text</option>
+                    </select>
+                </div>
+                <div class="flex space-x-2 mb-2">
+                    <input type="text" name="fields[1][label]" value="Email" readonly class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed">
+                    <select name="fields[1][type]" class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed" disabled>
+                        <option value="email">Email</option>
+                    </select>
+                </div>
+                {% for index, field in enumerate(fields) %}
+                    {% if index>1 %}
+                    
+                        <div class="flex space-x-2 mb-2">
+                            <input type="text" id="fields[{{ index }}][label]" name="fields[{{ index }}][label]" value="{{ field.label }}" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">                    
+                            <select id="fields[{{ index }}][type]" name="fields[{{ index }}][type]" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                                <option value="text" {% if field.type == 'text' %}selected{% endif %}>Text</option>
+                                <option value="email" {% if field.type == 'email' %}selected{% endif %}>Email</option>
+                                <option value="number" {% if field.type == 'number' %}selected{% endif %}>Number</option>
+                                <option value="file" {% if field.type == 'file' %}selected{% endif %}>File</option>
+                            </select>
+                            <button type="button" class="bg-red-500 text-white p-2 rounded-md hover:bg-red-700" onclick="removeField(this)">Remove</button>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addField()" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-700 transition duration-300">+ Add Field</button>
+            <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-700 transition duration-300">Update Form</button>
+            <button onclick="window.location.href='/';" class="w-full mt-2 bg-gray-500 text-white p-2 rounded-md hover:bg-gray-600 transition duration-300">Go Back</button>
+        </form>
+    </div>
+    <script>
+        function addField() {
+            const container = document.getElementById('fields-container');
+            const index = container.children.length;
+
+            const fieldDiv = document.createElement('div');
+            fieldDiv.className = 'flex space-x-2 mb-2';
+
+            const labelInput = document.createElement('input');
+            labelInput.type = 'text';
+            labelInput.name = `fields[${index}][label]`;
+            labelInput.placeholder = 'Label';
+            labelInput.className = 'p-2 border rounded-md flex-1';
+
+            const typeSelect = document.createElement('select');
+            typeSelect.name = `fields[${index}][type]`;
+            typeSelect.className = 'p-2 border rounded-md flex-1';
+            ['text', 'email', 'number', 'file'].forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+                typeSelect.appendChild(option);
+            });
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'bg-red-500 text-white p-2 rounded-md hover:bg-red-700';
+            removeButton.textContent = 'Remove';
+            removeButton.onclick = () => container.removeChild(fieldDiv);
+
+            fieldDiv.appendChild(labelInput);
+            fieldDiv.appendChild(typeSelect);
+            fieldDiv.appendChild(removeButton);
+
+            container.appendChild(fieldDiv);
+        }
+        function removeField(button) {
+            const fieldDiv = button.parentElement;
+            fieldDiv.remove();
+        }
+    </script>
+</body>
+</html>
+
+{% endblock %}

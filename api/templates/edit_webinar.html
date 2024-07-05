@@ -1,0 +1,33 @@
+{% extends "welcome.html" %}
+
+{% block title %}Edit Webinar{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-lg mt-8 mx-auto">
+    <h1 class="text-3xl font-bold mb-4">Edit "{{ webinar.webinar_name }}"</h1>
+    <form action="{{ url_for('edit_webinar', webinar_id=webinar.id) }}" method="post">
+        <div class="mb-4">
+            <label for="name" class="block text-lg font-medium text-gray-700">Webinar Name</label>
+            <input type="text" id="name" name="name" value="{{ webinar.webinar_name }}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="mb-4">
+            <label for="date" class="block text-lg font-medium text-gray-700">Webinar Date</label>
+            <input type="date" id="date" name="date" value="{{ webinar.date }}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="mb-4">
+            <label for="time" class="block text-lg font-medium text-gray-700">Webinar Time</label>
+            <input type="time" id="time" name="time" value="{{ webinar.time }}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="mb-4">
+            <label for="organizer" class="block text-lg font-medium text-gray-700">Webinar Organizer</label>
+            <input type="text" id="organizer" name="organizer" value="{{ webinar.organizer }}" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="mb-4">
+            <label for="description" class="block text-lg font-medium text-gray-700">Webinar Description</label>
+            <textarea id="description" name="description" cols="50" rows="10" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">{{ webinar.description }}</textarea>
+        </div>
+        <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Save Changes</button>
+    </form>
+    <button onclick="window.location.href='/';" class="mt-8 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Go Back</button>
+</div>
+{% endblock %}

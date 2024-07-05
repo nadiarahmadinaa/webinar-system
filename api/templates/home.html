@@ -1,0 +1,11 @@
+{% extends "welcome.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-lg mt-8 mx-auto">
+    {% if session['username'] %}
+    <h1 class="text-3xl font-bold mb-4">Welcome {{ session['username'] }}!</h1>
+    {% endif %}
+</div>
+{% endblock %}

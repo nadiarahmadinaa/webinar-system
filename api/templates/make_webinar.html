@@ -1,0 +1,44 @@
+{% extends "welcome.html" %}
+
+{% block title %}Create Webinar{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Webinar</title>
+</head>
+<body class="flex items-center justify-center">
+    <div class="container mx-auto p-4">
+        <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-lg mx-auto">
+            <h1 class="text-2xl font-bold mb-6 text-center text-gray-700">Create a New Webinar</h1>
+            <form action="{{ url_for('make_webinar') }}" method="post" class="space-y-4">
+                <div>
+                    <label for="name" class="block text-gray-700">Webinar Name:</label>
+                    <input type="text" id="name" name="name" required class="mt-1 p-2 w-full border rounded-md">
+                </div>
+                <div>
+                    <label for="date" class="block text-gray-700">Webinar Date:</label>
+                    <input type="date" id="date" name="date" required class="mt-1 p-2 w-full border rounded-md">
+                </div>
+                <div>
+                    <label for="time" class="block text-gray-700">Webinar Time:</label>
+                    <input type="time" id="time" name="time" required class="mt-1 p-2 w-full border rounded-md">
+                </div>
+                <div>
+                    <label for="organizer" class="block text-gray-700">Webinar Organizer:</label>
+                    <input type="text" id="organizer" name="organizer" required class="mt-1 p-2 w-full border rounded-md">
+                </div>
+                <div>
+                    <label for="description" class="block text-gray-700">Webinar Description:</label>
+                    <textarea id="description" name="description" cols="50" rows="10" class="mt-1 p-2 w-full border rounded-md"></textarea>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-200 hover:text-gray-400 transition duration-300">Create Webinar</button>
+                <button onclick="window.location.href='/';" class="w-full mt-2 bg-gray-500 text-white p-2 rounded-md hover:bg-gray-600 transition duration-300">Go Back</button>
+            </form>
+        </div>    
+    </div>
+</body>
+</html>
+{% endblock %}

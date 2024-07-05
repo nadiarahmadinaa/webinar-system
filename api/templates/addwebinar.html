@@ -1,0 +1,25 @@
+{% extends "welcome.html" %}
+
+{% block title %}Create Webinar{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Form</title>
+</head>
+<body>
+    <h1>Create a New Form</h1>
+    <form action="{{ url_for('addwebinar') }}" method="post">
+        <label for="name">Form Name:</label><br>
+        <input type="text" id="name" name="name"><br><br>
+        
+        <label for="fields">Form Fields (JSON format):</label><br>
+        <textarea id="fields" name="fields" rows="10" cols="50">[{"label": "Name", "type": "text"}, {"label": "Email", "type": "email"}]</textarea><br><br>
+        
+        <input type="submit" value="Create Form">
+    </form>
+    <br><br><button onclick="window.location.href='/';" class="back">Go Back</button>
+</body>
+</html>
+{% endblock %}
