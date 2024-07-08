@@ -16,6 +16,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import timedelta
 import psycopg2
 import sqlalchemy.dialects.postgresql
+import tempfile
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -23,13 +24,12 @@ app.secret_key = 'your_secret_key'
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://default:8iXjK9CPdhev@ep-polished-salad-a1bgg5k2.ap-southeast-1.aws.neon.tech:5432/verceldb?sslmode=require"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-#new
-app.config['UPLOAD_FOLDER'] = 'uploads/'  # Folder to store uploaded files
+if not os.path.exists(app.config['UPLOAD_FOLDER']):
+    os.makedirs(app.config['UPLOAD_FOLDER'])
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
-#new
 
 db = SQLAlchemy(app)
 
@@ -131,7 +131,7 @@ def make_webinar():
 def edit_webinar(webinar_id):
     current_webinar = Webinar.query.get_or_404(webinar_id)
     if 'username' not in session or session['username'] != current_webinar.creator.username:
-        flash('You need to be logged in to edit a webinar.', 'error')
+        flash('You are not authorized to edit the webinar.', 'error')
         return redirect(url_for('login'))
     
     if request.method == 'POST':
@@ -155,8 +155,9 @@ def edit_webinar(webinar_id):
 
 @app.route("/edit_form/<form_id>", methods=["GET", "POST"])
 def edit_form(form_id):
-    if 'username' not in session:
-        flash('You need to be logged in to edit a form.', 'error')
+    current_form = Form.query.get_or_404(form_id)
+    if 'username' not in session or session['username'] != current_form.event.creator.username:
+        flash('You are not authorized to edit the form.', 'error')
         return redirect(url_for('login'))
 
     form = Form.query.get_or_404(form_id)
@@ -230,7 +231,7 @@ def generate_certificates(webinar_id):
     webinar = Webinar.query.get_or_404(webinar_id)
 
     if 'username' not in session or session['username'] != webinar.creator.username:
-        flash('You need to be logged in to edit a webinar.', 'error')
+        flash('You are not authorized to generate certificates.', 'error')
         return redirect(url_for('login'))
     
 
@@ -244,8 +245,6 @@ def generate_certificates(webinar_id):
             flash('Invalid passing grade. Please enter a number between 0 and 100.', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
 
-        #new
-        # Check if a file was uploaded
         if 'template' not in request.files or request.files['template'].filename == '':
             flash('No template file uploaded', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
@@ -254,7 +253,11 @@ def generate_certificates(webinar_id):
         if template_file and allowed_file(template_file.filename):
             filename = secure_filename(template_file.filename)
             template_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            template_file.save(template_path)
+            try:
+                template_file.save(template_path)
+            except FileNotFoundError:
+                flash('Failed to save the uploaded file.', 'error')
+                return redirect(url_for('view_webinar', webinar_id=webinar_id))
         else:
             flash('Invalid file format. Only PDF files are allowed.', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
@@ -267,28 +270,33 @@ def generate_certificates(webinar_id):
             flash('Invalid font size, please enter a number', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
 
-        #new
-
-        # Fetch registration and absence forms for the webinar
         register_forms = Form.query.filter(Form.event == webinar, Form.type == 'register').all()
         absence_forms = Form.query.filter(Form.event == webinar, Form.type == 'absence').all()
         registered = set()
         temp_attended = dict()
         participants = set()
-        
-        # Extract data from registration forms
+
         for form in register_forms:
             submissions = Submission.query.filter_by(form_id=form.id).all()
             for submission in submissions:
                 data = json.loads(submission.data)
-                registered.add((data['Name'], data['Email']))
-        
-        # Extract data from absence forms and count attendance
+                for i in data:
+                    if i ==1:
+                        name = i
+                    if i == 2:
+                        email = i
+                registered.add((data[name], data[email]))
+
         for form in absence_forms:
             submissions = Submission.query.filter_by(form_id=form.id).all()
             for submission in submissions:
                 data = json.loads(submission.data)
-                person = (data['Name'], data['Email'])
+                for i in data:
+                    if i ==1:
+                        name = i
+                    if i == 2:
+                        email = i
+                registered.add((data[name], data[email]))
                 if person in temp_attended:
                     temp_attended[person] += 1
                 else:
@@ -306,31 +314,29 @@ def generate_certificates(webinar_id):
         # Generate certificates for participants in both sets
         in_memory_zip = io.BytesIO()
         
-        with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
-            for name, email in participants:
-                #new
-                doc = fitz.open(template_path)
-                page = doc[0]  # assuming the certificate template is a single page
+        try:
+            with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
+                for name, email in participants:
+                    doc = fitz.open(template_path)
+                    page = doc[0]
 
-                # Replace tags in the template
-                placeholder = request.form['placeholder']
-                text_instances = page.search_for(placeholder)
-                for inst in text_instances:
-                    rect = inst
-                    # Remove the placeholder text by redacting it
-                    page.add_redact_annot(rect)
-                    page.apply_redactions()
-                    # Overlay the name on top of the placeholder position
-                    # Center the name within the bounding box of the placeholder
-                    text_width = stringWidth(placeholder, "Helvetica", font_size)
-                    text_x = rect.x0 + (rect.width - text_width) / 2 + 4
-                    text_y = rect.y0 + rect.height / 2 + 4  # Adjusting the y-coordinate for better vertical alignment
-                    page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
+                    placeholder = request.form['placeholder']
+                    text_instances = page.search_for(placeholder)
+                    for inst in text_instances:
+                        rect = inst
+                        page.add_redact_annot(rect)
+                        page.apply_redactions()
+                        text_width = stringWidth(placeholder, "Helvetica", font_size)
+                        text_x = rect.x0 + (rect.width - text_width) / 2 + 4
+                        text_y = rect.y0 + rect.height / 2 + 4 
+                        page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
 
-                pdf_buffer = io.BytesIO(doc.write())
-                zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
-                #new
-
+                    pdf_buffer = io.BytesIO(doc.write())
+                    zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
+        except Exception as e:
+            flash(f"Error generating certificates: {str(e)}", 'error')
+            return redirect(url_for('view_webinar', webinar_id=webinar_id))
+    
         in_memory_zip.seek(0)
     
         return send_file(in_memory_zip, download_name="certificates.zip", as_attachment=True)
@@ -355,8 +361,9 @@ def submit_form(form_id):
 
 @app.route("/delete_form/<form_id>", methods=["POST"])
 def delete_form(form_id):
-    if 'username' not in session:
-        flash('You need to be logged in to delete a form.', 'error')
+    current_form = Form.query.get_or_404(form_id)
+    if 'username' not in session or session['username'] != current_form.event.creator.username:
+        flash('You are not authorized to delete the form.', 'error')
         return redirect(url_for('login'))
     
     form = Form.query.get_or_404(form_id)
