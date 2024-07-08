@@ -19,11 +19,12 @@ import sqlalchemy.dialects.postgresql
 import tempfile
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+app.secret_key = '263FEA1F87FC3FAA'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://default:8iXjK9CPdhev@ep-polished-salad-a1bgg5k2.ap-southeast-1.aws.neon.tech:5432/verceldb?sslmode=require"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = 'uploads/'
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
@@ -280,23 +281,27 @@ def generate_certificates(webinar_id):
             submissions = Submission.query.filter_by(form_id=form.id).all()
             for submission in submissions:
                 data = json.loads(submission.data)
+                count = 0
                 for i in data:
-                    if i ==1:
+                    if count == 0:
                         name = i
-                    if i == 2:
+                    if count == 1:
                         email = i
+                    count += 1
                 registered.add((data[name], data[email]))
 
         for form in absence_forms:
             submissions = Submission.query.filter_by(form_id=form.id).all()
             for submission in submissions:
                 data = json.loads(submission.data)
+                count = 0
                 for i in data:
-                    if i ==1:
+                    if count == 0:
                         name = i
-                    if i == 2:
+                    if count == 1:
                         email = i
-                registered.add((data[name], data[email]))
+                    count += 1
+                person = (data[name], data[email])
                 if person in temp_attended:
                     temp_attended[person] += 1
                 else:
