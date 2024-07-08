@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, render_template_string, send_file, app
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from flask_uploads import UploadSet, configure_uploads, DOCUMENTS
 from flask_sqlalchemy import SQLAlchemy
 import uuid
 import json
@@ -24,10 +25,12 @@ app.secret_key = '263FEA1F87FC3FAA'
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://default:8iXjK9CPdhev@ep-polished-salad-a1bgg5k2.ap-southeast-1.aws.neon.tech:5432/verceldb?sslmode=require"
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'uploads/'
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+app.config['UPLOADED_DOCS_DEST'] = os.path.join(os.getcwd(), 'static', 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
+docs = UploadSet('docs', DOCUMENTS)
+configure_uploads(app, docs)
+if not os.path.exists(app.config['UPLOADED_DOCS_DEST']):
+    os.makedirs(app.config['UPLOADED_DOCS_DEST'])
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -253,12 +256,8 @@ def generate_certificates(webinar_id):
         template_file = request.files['template']
         if template_file and allowed_file(template_file.filename):
             filename = secure_filename(template_file.filename)
-            template_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            try:
-                template_file.save(template_path)
-            except FileNotFoundError:
-                flash('Failed to save the uploaded file.', 'error')
-                return redirect(url_for('view_webinar', webinar_id=webinar_id))
+            template_path = docs.save(template_file)
+            template_path = os.path.join(app.config['UPLOADED_DOCS_DEST'], template_path)
         else:
             flash('Invalid file format. Only PDF files are allowed.', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
@@ -319,28 +318,24 @@ def generate_certificates(webinar_id):
         # Generate certificates for participants in both sets
         in_memory_zip = io.BytesIO()
         
-        try:
-            with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
-                for name, email in participants:
-                    doc = fitz.open(template_path)
-                    page = doc[0]
+        with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
+            for name, email in participants:
+                doc = fitz.open(template_path)
+                page = doc[0]
 
-                    placeholder = request.form['placeholder']
-                    text_instances = page.search_for(placeholder)
-                    for inst in text_instances:
-                        rect = inst
-                        page.add_redact_annot(rect)
-                        page.apply_redactions()
-                        text_width = stringWidth(placeholder, "Helvetica", font_size)
-                        text_x = rect.x0 + (rect.width - text_width) / 2 + 4
-                        text_y = rect.y0 + rect.height / 2 + 4 
-                        page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
+                placeholder = request.form['placeholder']
+                text_instances = page.search_for(placeholder)
+                for inst in text_instances:
+                    rect = inst
+                    page.add_redact_annot(rect)
+                    page.apply_redactions()
+                    text_width = stringWidth(placeholder, "Helvetica", font_size)
+                    text_x = rect.x0 + (rect.width - text_width) / 2 + 4
+                    text_y = rect.y0 + rect.height / 2 + 4 
+                    page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
 
-                    pdf_buffer = io.BytesIO(doc.write())
-                    zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
-        except Exception as e:
-            flash(f"Error generating certificates: {str(e)}", 'error')
-            return redirect(url_for('view_webinar', webinar_id=webinar_id))
+                pdf_buffer = io.BytesIO(doc.write())
+                zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
     
         in_memory_zip.seek(0)
     
