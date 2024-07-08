@@ -253,9 +253,7 @@ def generate_certificates(webinar_id):
 
         template_file = request.files['template']
         if template_file and allowed_file(template_file.filename):
-            filename = secure_filename(template_file.filename)
-            template_path = docs.save(template_file)
-            template_path = os.path.join(app.config['UPLOADED_DOCS_DEST'], template_path)
+            template_bytes = template_file.read()
         else:
             flash('Invalid file format. Only PDF files are allowed.', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
@@ -318,7 +316,7 @@ def generate_certificates(webinar_id):
         
         with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
             for name, email in participants:
-                doc = fitz.open(template_path)
+                doc = fitz.open(stream=template_bytes, filetype="pdf")
                 page = doc[0]
 
                 placeholder = request.form['placeholder']
