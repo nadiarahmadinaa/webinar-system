@@ -29,8 +29,6 @@ app.config['UPLOADED_DOCS_DEST'] = os.path.join(os.getcwd(), 'static', 'uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
 docs = UploadSet('docs', DOCUMENTS)
 configure_uploads(app, docs)
-if not os.path.exists(app.config['UPLOADED_DOCS_DEST']):
-    os.makedirs(app.config['UPLOADED_DOCS_DEST'])
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
