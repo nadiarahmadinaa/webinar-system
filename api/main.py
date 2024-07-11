@@ -314,7 +314,6 @@ def generate_certificates(webinar_id):
         # Generate certificates for participants in both sets
         in_memory_zip = io.BytesIO()
         input_method = request.form['input_method']
-        placeholder = request.form['placeholder'] if input_method == 'placeholder' else None
         x_coordinate = float(request.form['x_coordinate']) if input_method == 'coordinates' else None
         y_coordinate = float(request.form['y_coordinate']) if input_method == 'coordinates' else None
         
@@ -323,7 +322,8 @@ def generate_certificates(webinar_id):
                 doc = fitz.open(stream=template_bytes, filetype="pdf")
                 page = doc[0]
 
-                if placeholder:
+                if input_method == 'placeholder':
+                    placeholder = request.form['placeholder']
                     text_instances = page.search_for(placeholder)
                     for inst in text_instances:
                         rect = inst
