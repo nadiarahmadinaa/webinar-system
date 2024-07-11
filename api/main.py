@@ -125,7 +125,7 @@ def make_webinar():
         db.session.commit()
         
         form_link = url_for('view_webinar', webinar_id=webinar_id, _external=True)
-        return f'Webinar created! Access it at: <a href="{form_link}">{form_link}</a>'
+        return render_template('message.html', message='Webinar created! Access it at:', link=form_link)
 
     return render_template('make_webinar.html')
 
@@ -151,7 +151,7 @@ def edit_webinar(webinar_id):
         db.session.commit()
         
         form_link = url_for('view_webinar', webinar_id=webinar_id, _external=True)
-        return f'Webinar edited! Access it at: <a href="{form_link}">{form_link}</a>'
+        return render_template('message.html','Webinar edited! Access it at:', link=form_link)
 
     return render_template('edit_webinar.html', webinar = current_webinar)
 
@@ -179,7 +179,7 @@ def edit_form(form_id):
         db.session.commit()
         
         form_link = url_for('view_form', form_id=form.id, _external=True)
-        return f'Form updated! Access it at: <a href="{form_link}">{form_link}</a>'
+        return render_template('message.html','Form updated! Access it at:', link=form_link)
     
     fields = json.loads(form.fields)
     return render_template('edit_form.html', form=form, fields=fields, form_type=form.type, enumerate=enumerate)
@@ -209,7 +209,7 @@ def make_form(webinar_id, form_type):
         db.session.commit()
         
         form_link = url_for('view_form', form_id=form_id, _external=True)
-        return f'Form created! Access it at: <a href="{form_link}">{form_link}</a>'
+        return render_template('message.html','Form created! Access it at:', link=form_link)
     
     return render_template('make_form.html', webinar_id=webinar_id, form_type=form_type)
 
@@ -313,22 +313,28 @@ def generate_certificates(webinar_id):
         
         # Generate certificates for participants in both sets
         in_memory_zip = io.BytesIO()
+        input_method = request.form['input_method']
+        placeholder = request.form['placeholder'] if input_method == 'placeholder' else None
+        x_coordinate = float(request.form['x_coordinate']) if input_method == 'coordinates' else None
+        y_coordinate = float(request.form['y_coordinate']) if input_method == 'coordinates' else None
         
         with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
             for name, email in participants:
                 doc = fitz.open(stream=template_bytes, filetype="pdf")
                 page = doc[0]
 
-                placeholder = request.form['placeholder']
-                text_instances = page.search_for(placeholder)
-                for inst in text_instances:
-                    rect = inst
-                    page.add_redact_annot(rect)
-                    page.apply_redactions()
-                    text_width = stringWidth(placeholder, "Helvetica", font_size)
-                    text_x = rect.x0 + (rect.width - text_width) / 2 + 4
-                    text_y = rect.y0 + rect.height / 2 + 4 
-                    page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
+                if placeholder:
+                    text_instances = page.search_for(placeholder)
+                    for inst in text_instances:
+                        rect = inst
+                        page.add_redact_annot(rect)
+                        page.apply_redactions()
+                        text_width = stringWidth(placeholder, "Helvetica", font_size)
+                        text_x = rect.x0 + (rect.width - text_width) / 2 + 4
+                        text_y = rect.y0 + rect.height / 2 + 4 
+                        page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
+                elif x_coordinate is not None and y_coordinate is not None:
+                    page.insert_text((x_coordinate, y_coordinate), name, font_size, color=(0, 0, 0))
 
                 pdf_buffer = io.BytesIO(doc.write())
                 zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())

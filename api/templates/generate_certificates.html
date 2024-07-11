@@ -8,15 +8,31 @@
     <form action="{{ url_for('generate_certificates', webinar_id=webinar.id) }}" method="post" enctype="multipart/form-data">
         <div class="mb-4">
             <label for="passing_grade" class="block text-lg font-medium text-gray-700">Passing Grade (%)</label>
-            <input type="text" id="passing_grade" name="passing_grade" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            <input type="text" id="passing_grade" name="passing_grade" value = "0" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
         </div>
         <div class="mb-4">
             <label for="template" class="block text-lg font-medium text-gray-700">Certificate Template (PDF)</label>
             <input type="file" id="template" name="template" accept=".pdf" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
         </div>
         <div class="mb-4">
+            <label class="block text-lg font-medium text-gray-700">Name Input Method</label>
+            <p class="font-normal text-gray-700">Placeholder recommended for searchable PDF types. If you use an image-only PDF type, please use coordinates instead.</p>
+            <div class="mt-1">
+                <input type="radio" id="input_method_placeholder" name="input_method" value="placeholder" checked onclick="toggleInputMethod()">
+                <label for="input_method_placeholder" class="ml-2">Placeholder</label>
+                <input type="radio" id="input_method_coordinates" name="input_method" value="coordinates" class="ml-4" onclick="toggleInputMethod()">
+                <label for="input_method_coordinates" class="ml-2">Coordinates</label>
+            </div>
+        </div>
+        <div id="placeholder_input" class="mb-4">
             <label for="placeholder" class="block text-lg font-medium text-gray-700">Placeholder for name</label>
             <input type="text" id="placeholder" name="placeholder" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div id="coordinates_input" class="mb-4 hidden">
+            <label for="x_coordinate" class="block text-lg font-medium text-gray-700">X Coordinate for name</label>
+            <input type="text" id="x_coordinate" name="x_coordinate" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            <label for="y_coordinate" class="block text-lg font-medium text-gray-700 mt-4">Y Coordinate for name</label>
+            <input type="text" id="y_coordinate" name="y_coordinate" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
         </div>
         <div class="mb-4">
             <label for="font_size" class="block text-lg font-medium text-gray-700">Font Size Replacement</label>
@@ -29,6 +45,21 @@
     <div class="mx-auto text-center">
         <a href="{{ url_for('view_webinar', webinar_id=webinar.id) }}" class="mt-8 inline-block bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Go Back</a>
     </div>
-    
 </div>
+
+<script>
+function toggleInputMethod() {
+    const placeholderInput = document.getElementById('placeholder_input');
+    const coordinatesInput = document.getElementById('coordinates_input');
+    const inputMethod = document.querySelector('input[name="input_method"]:checked').value;
+
+    if (inputMethod === 'placeholder') {
+        placeholderInput.classList.remove('hidden');
+        coordinatesInput.classList.add('hidden');
+    } else {
+        placeholderInput.classList.add('hidden');
+        coordinatesInput.classList.remove('hidden');
+    }
+}
+</script>
 {% endblock %}
