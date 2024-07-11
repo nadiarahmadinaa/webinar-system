@@ -329,12 +329,18 @@ def generate_certificates(webinar_id):
                         rect = inst
                         page.add_redact_annot(rect)
                         page.apply_redactions()
-                        text_width = stringWidth(placeholder, "Helvetica", font_size)
+                        text_width = stringWidth(name, "Helvetica", font_size)
                         text_x = rect.x0 + (rect.width - text_width) / 2 + 4
                         text_y = rect.y0 + rect.height / 2 + 4 
                         page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
                 elif x_coordinate is not None and y_coordinate is not None:
-                    page.insert_text((x_coordinate, y_coordinate), name, font_size, color=(0, 0, 0))
+                    if x_coordinate<0 or y_coordinate<0:
+                        flash('Invalid coordinates.', 'error')
+                        return redirect(url_for('generate_certificates', webinar_id=webinar_id))
+                    font = page.insert_font("Helvetica")
+                    text_x = x_coordinate - (stringWidth(name, "Helvetica", font_size)/2)
+                    text_y = y_coordinate
+                    page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
 
                 pdf_buffer = io.BytesIO(doc.write())
                 zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
@@ -343,6 +349,45 @@ def generate_certificates(webinar_id):
     
         return send_file(in_memory_zip, download_name="certificates.zip", as_attachment=True)
     return render_template('generate_certificates.html', webinar=webinar)
+
+@app.route("/generate_certificates_preview/<webinar_id>", methods=["POST"])
+def generate_certificates_preview(webinar_id):
+    if 'template' not in request.files or request.files['template'].filename == '':
+        return "No template file uploaded", 400
+
+    template_file = request.files['template']
+    if not allowed_file(template_file.filename):
+        return "Invalid file format. Only PDF files are allowed.", 400
+
+    template_bytes = template_file.read()
+
+    try:
+        x_coordinate = float(request.form['x_coordinate'])
+        y_coordinate = float(request.form['y_coordinate'])
+        if x_coordinate < 0 or y_coordinate < 0:
+            raise ValueError
+    except ValueError:
+        flash('Invalid coordinates', 'error')
+        return redirect(url_for('generate_certificates', webinar_id=webinar_id))
+    
+    try:
+        font_size = float(request.form['font_size'])
+        if font_size <=0:
+            raise ValueError
+    except ValueError:
+        flash('Invalid font size, please enter a number', 'error')
+        return redirect(url_for('generate_certificates', webinar_id=webinar_id))
+
+    doc = fitz.open(stream=template_bytes, filetype="pdf")
+    page = doc[0]
+
+    font = page.insert_font("Helvetica")
+    text_x = x_coordinate - (stringWidth("Your Text Here", "Helvetica", font_size)/2)
+    text_y = y_coordinate
+    page.insert_text((text_x, text_y), "Your Text Here", font_size, color=(0, 0, 0))
+
+    pdf_buffer = io.BytesIO(doc.write())
+    return send_file(io.BytesIO(pdf_buffer.getvalue()), mimetype='application/pdf')
 
 @app.route('/form/<form_id>', methods=['GET'])
 def view_form(form_id):
