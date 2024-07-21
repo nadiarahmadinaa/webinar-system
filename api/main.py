@@ -151,7 +151,7 @@ def edit_webinar(webinar_id):
         db.session.commit()
         
         form_link = url_for('view_webinar', webinar_id=webinar_id, _external=True)
-        return render_template('message.html','Webinar edited! Access it at:', link=form_link)
+        return render_template('message.html',message='Webinar edited! Access it at:', link=form_link)
 
     return render_template('edit_webinar.html', webinar = current_webinar)
 
@@ -179,7 +179,7 @@ def edit_form(form_id):
         db.session.commit()
         
         form_link = url_for('view_form', form_id=form.id, _external=True)
-        return render_template('message.html','Form updated! Access it at:', link=form_link)
+        return render_template('message.html',message='Form updated! Access it at:', link=form_link)
     
     fields = json.loads(form.fields)
     return render_template('edit_form.html', form=form, fields=fields, form_type=form.type, enumerate=enumerate)
@@ -209,7 +209,7 @@ def make_form(webinar_id, form_type):
         db.session.commit()
         
         form_link = url_for('view_form', form_id=form_id, _external=True)
-        return render_template('message.html','Form created! Access it at:', link=form_link)
+        return render_template('message.html',message='Form created! Access it at:', link=form_link)
     
     return render_template('make_form.html', webinar_id=webinar_id, form_type=form_type)
 
