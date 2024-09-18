@@ -1,0 +1,72 @@
+{% extends "welcome.html" %}
+
+{% block title %}Participants Info{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-lg mt-8">
+    <h1 class="text-3xl font-bold mb-4 text-center">Participants of {{ webinar.webinar_name }}</h1>
+
+    <div class="overflow-x-auto">
+        <table id="participants-table" class="min-w-full bg-white border border-gray-200 rounded-lg shadow">
+            <thead>
+                <tr>
+                    <th class="px-4 py-2 text-left">Form Name</th>
+                    <!-- Column headers will be inserted dynamically by JavaScript -->
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Rows will be inserted dynamically by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="flex justify-center mt-8">
+        <button id="go-back-btn" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Go Back</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const participantsData = JSON.parse('{{ participants_data|tojson|safe }}');
+        const table = document.getElementById('participants-table');
+        const thead = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+
+        if (participantsData.length > 0) {
+            // Add dynamic column headers
+            const headers = Object.keys(participantsData[0].data);
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.classList.add('px-4', 'py-2', 'text-left');
+                th.textContent = header;
+                thead.appendChild(th);
+            });
+
+            // Add rows
+            participantsData.forEach(participant => {
+                const tr = document.createElement('tr');
+                tr.classList.add('border-b');
+                
+                const formNameTd = document.createElement('td');
+                formNameTd.classList.add('px-4', 'py-2');
+                formNameTd.textContent = participant.form_name;
+                tr.appendChild(formNameTd);
+                
+                headers.forEach(header => {
+                    const td = document.createElement('td');
+                    td.classList.add('px-4', 'py-2');
+                    td.textContent = participant.data[header];
+                    tr.appendChild(td);
+                });
+
+                tbody.appendChild(tr);
+            });
+        }
+    });
+
+    document.getElementById('go-back-btn').addEventListener('click', function() {
+        window.location.href = "{{ url_for('view_webinar', webinar_id=webinar.id) }}";
+    });
+</script>
+{% endblock %}
+

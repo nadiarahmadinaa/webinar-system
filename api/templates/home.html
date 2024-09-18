@@ -3,9 +3,54 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-<div class="bg-white p-8 rounded-lg shadow-lg mt-8 mx-auto">
+<div class="bg-white p-8 rounded-lg shadow-lg mt-8 mx-auto max-w-4xl">
     {% if session['username'] %}
-    <h1 class="text-3xl font-bold mb-4">Welcome {{ session['username'] }}!</h1>
+    <h1 class="text-3xl font-bold mb-4 text-center">Welcome, {{ session['username'] }}!</h1>
+    {% else %}
+    <h1 class="text-3xl font-bold mb-4 text-center">Welcome to Webinar System!</h1>
     {% endif %}
+
+    <div class="mb-8 text-center">
+        <p class="text-lg text-gray-700">Your go-to platform for organizing and managing webinars effortlessly.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="flex flex-col items-center">
+            <img src="{{ url_for('static', filename='images/organizer.jpg') }}" alt="Webinar Organizer" class="w-full rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold mt-4">Webinar Organizer</h2>
+            <p class="text-gray-600 mt-2 text-center">Easily organize and schedule your webinars with our intuitive tools. Ensure smooth and successful events every time.</p>
+        </div>
+        <div class="flex flex-col items-center">
+            <img src="{{ url_for('static', filename='images/participant_data.jpg') }}" alt="Data Handling" class="w-full rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold mt-4">Data Handler</h2>
+            <p class="text-gray-600 mt-2 text-center">Efficiently manage participant data, track attendance, and generate personalized certificates with ease.</p>
+        </div>
+    </div>
+
+    <div class="mt-12">
+        <h2 class="text-3xl font-bold text-center mb-8">Features for Webinar Hosts</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="flex flex-col items-center">
+                <img src="{{ url_for('static', filename='images/registration.jpg') }}" alt="Registration" class="w-full rounded-lg shadow-md">
+                <h3 class="text-2xl font-semibold mt-4">Easy Registration</h3>
+                <p class="text-gray-600 mt-2 text-center">Simplify the registration process with our intuitive platform. Manage attendee information effortlessly.</p>
+            </div>
+            <div class="flex flex-col items-center">
+                <img src="{{ url_for('static', filename='images/absence.jpg') }}" alt="Absence Tracking" class="w-full rounded-lg shadow-md">
+                <h3 class="text-2xl font-semibold mt-4">Absence Tracking</h3>
+                <p class="text-gray-600 mt-2 text-center">Keep track of attendee presence and absences seamlessly. Generate attendance reports with ease.</p>
+            </div>
+            <div class="flex flex-col items-center">
+                <img src="{{ url_for('static', filename='images/certificates.jpg') }}" alt="Certificate Creation" class="w-full rounded-lg shadow-md">
+                <h3 class="text-2xl font-semibold mt-4">Certificate Creation</h3>
+                <p class="text-gray-600 mt-2 text-center">Automatically generate certificates for your attendees. Customize and distribute certificates efficiently.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-12 text-center">
+        <a href="{{ url_for('make_webinar') }}" class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-600">Get Started</a>
+    </div>
 </div>
 {% endblock %}
+

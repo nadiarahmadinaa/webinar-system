@@ -1,23 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, render_template_string, send_file, app
+from flask import Flask, render_template, request, redirect, url_for, session, flash, render_template_string, send_file, app, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_uploads import UploadSet, configure_uploads, DOCUMENTS
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 import uuid
 import json
+import string
 import zipfile
 import io
+import qrcode
 import os
+import re
 import fitz
+from PIL import Image
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import timedelta
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from flask_mail import Mail, Message
 import psycopg2
 import sqlalchemy.dialects.postgresql
 import tempfile
+import random
 
 app = Flask(__name__)
 app.secret_key = '263FEA1F87FC3FAA'
@@ -26,19 +34,32 @@ app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://default:8iXjK9CPdhev@ep-po
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOADED_DOCS_DEST'] = os.path.join(os.getcwd(), 'static', 'uploads')
-app.config['ALLOWED_EXTENSIONS'] = {'pdf'}
+app.config['QR_CODES_DEST'] = os.path.join(os.getcwd(), 'static', 'qr')
+ALLOWED_EXTENSIONS = {'pdf'}
+
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'webinarsystem.app@gmail.com'
+app.config['MAIL_PASSWORD'] = 'm4iL_4_webinars'
+mail = Mail(app)
+s = URLSafeTimedSerializer('gm5CgA9Hxwufdy4BWV')
+
 docs = UploadSet('docs', DOCUMENTS)
 configure_uploads(app, docs)
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+    return '.' in filename and filename[-4:].lower() == '.pdf'
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
+    username = db.Column(db.String(200), unique=True, nullable=False)
+    password = db.Column(db.String(400), nullable=False)
+    email = db.Column(db.String(400), unique=True, nullable=True)
+    email_verified = db.Column(db.Boolean, default=False)
     webinars = db.relationship('Webinar', backref='creator', lazy=True)
     
 class Webinar(db.Model):
@@ -50,6 +71,8 @@ class Webinar(db.Model):
     time = db.Column(db.String, nullable = False)
     organizer = db.Column(db.String(200), nullable=False)
     description = db.Column(db.String(1000))
+    serial_number = db.Column(db.String, nullable = True)
+    certified_participants = db.Column(db.Text, nullable=True)
 
 class Form(db.Model):
     id = db.Column(db.String(36), primary_key=True)
@@ -57,6 +80,7 @@ class Form(db.Model):
     webinar_id = db.Column(db.String(36), db.ForeignKey('webinar.id'), nullable=False)
     fields = db.Column(db.Text, nullable=False)  # JSON string of fields
     type = db.Column(db.String(36), nullable=False)
+    active = db.Column(db.Boolean, default=True)
 
 class Submission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -69,7 +93,7 @@ with app.app_context():
 @app.before_request  # runs before FIRST request (only once)
 def make_session_permanent():
     session.permanent = True
-    app.permanent_session_lifetime = timedelta(minutes=5)
+    app.permanent_session_lifetime = timedelta(minutes=60)
 
 @app.route("/")
 def home():
@@ -80,16 +104,48 @@ def register():
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
+        email = request.form['email']
+        if len(username) < 4:
+            flash('Username must be at least 4 characters long.', 'error')
+            return redirect(url_for('register'))
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long.', 'error')
+            return redirect(url_for('register'))
+        if not re.search("[a-z]", password) or not re.search("[A-Z]", password) or not re.search("[0-9]", password) or not re.search("[@#$%^&+=]", password):
+            flash('Password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character.', 'error')
+            return redirect(url_for('register'))
         if User.query.filter_by(username=username).first():
             flash('Username already exists!', 'error')
             return redirect(url_for('register'))
+            
         hashed_password = generate_password_hash(password)
-        new_user = User(username=username, password=hashed_password)
+        new_user = User(username=username, password=hashed_password, email=email, email_verified=True)
         db.session.add(new_user)
         db.session.commit()
-        flash('Registration successful! You can now log in.', 'success')
+
+        # token = s.dumps(email, salt='email-confirm')
+        # msg = Message('Confirm Email', sender='your_email@example.com', recipients=[email])
+        # link = url_for('confirm_email', token=token, _external=True)
+        # msg.body = f'Your confirmation link is {link}'
+        # mail.send(msg)
+
+        flash('Registration successful! Please check your email to confirm your account.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html')
+
+@app.route('/confirm_email/<token>')
+def confirm_email(token):
+    try:
+        email = s.loads(token, salt='email-confirm', max_age=3600)
+        user = User.query.filter_by(username=email).first()
+        if user:
+            user.email_verified = True
+            db.session.commit()
+            flash('Email confirmed! You can now log in.', 'success')
+            return redirect(url_for('login'))
+    except SignatureExpired:
+        flash('The confirmation link has expired.', 'error')
+        return redirect(url_for('register'))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -98,13 +154,56 @@ def login():
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            session['username'] = username
-            flash('Login successful!', 'success')
-            return redirect(url_for('home'))
+            if user.email_verified:
+                session['username'] = username
+                flash('Login successful!', 'success')
+                return redirect(url_for('home'))
+            else:
+                flash('Please verify your email first.', 'error')
+                return redirect(url_for('login'))
         else:
             flash('Invalid credentials!', 'error')
             return redirect(url_for('login'))
     return render_template('login.html')
+
+@app.route("/forgot_password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form['email']
+        user = User.query.filter_by(username=email).first()
+
+        if user:
+            token = s.dumps(email, salt='password-reset')
+            msg = Message('Reset Your Password', sender='webinarsystem.app@gmail.com', recipients=[email])
+            link = url_for('reset_password', token=token, _external=True)
+            msg.body = f'Your password reset link is {link}'
+            mail.send(msg)
+
+            flash('A password reset link has been sent to your email.', 'success')
+        else:
+            flash('Invalid email address!', 'error')
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password/<token>', methods=["GET", "POST"])
+def reset_password(token):
+    try:
+        email = s.loads(token, salt='password-reset', max_age=3600)
+        user = User.query.filter_by(username=email).first()
+
+        if request.method == "POST":
+            new_password = request.form['password']
+            if len(new_password) < 8 or not re.search("[a-z]", new_password) or not re.search("[A-Z]", new_password) or not re.search("[0-9]", new_password) or not re.search("[@#$%^&+=!*]", new_password): #TODO: FIX THE SPECIAL CHAR
+                flash('Password must meet the strength requirements.', 'error')
+            else:
+                hashed_password = generate_password_hash(new_password)
+                user.password = hashed_password
+                db.session.commit()
+                flash('Your password has been reset. You can now log in.', 'success')
+                return redirect(url_for('login'))
+        return render_template('reset_password.html')
+    except SignatureExpired:
+        flash('The password reset link has expired.', 'error')
+        return redirect(url_for('forgot_password'))
 
 @app.route("/make_webinar", methods=["GET", "POST"])
 def make_webinar():
@@ -186,8 +285,9 @@ def edit_form(form_id):
 
 @app.route("/make_form/<webinar_id>/<form_type>", methods=["GET", "POST"])
 def make_form(webinar_id, form_type):
-    if 'username' not in session:
-        flash('You need to be logged in to create a form.', 'error')
+    current_webinar = Webinar.query.get_or_404(webinar_id)
+    if 'username' not in session or session['username'] != current_webinar.creator.username:
+        flash('You are not authorized to make a form.', 'error')
         return redirect(url_for('login'))
 
     webinar = Webinar.query.get_or_404(webinar_id)
@@ -228,34 +328,137 @@ def view_webinar(webinar_id):
     webinar = Webinar.query.get_or_404(webinar_id)
     return render_template('view_webinar.html', webinar=webinar)
 
+@app.route('/webinar/<webinar_id>/participants', methods=['GET'])
+def view_participants(webinar_id):
+    current_webinar = Webinar.query.get_or_404(webinar_id)
+    if 'username' not in session or session['username'] != current_webinar.creator.username:
+        flash('You are not authorized to view the webinar.', 'error')
+        return redirect(url_for('login'))
+    webinar = Webinar.query.get_or_404(webinar_id)
+    register_forms = Form.query.filter(Form.event == webinar, Form.type == 'register').all()
+    
+    participants_data = []
+    for form in register_forms:
+        submissions = Submission.query.filter_by(form_id=form.id).all()
+        for submission in submissions:
+            data = json.loads(submission.data)
+            participants_data.append({
+                "form_name": form.name,
+                "data": data
+            })
+
+    return render_template('view_participants.html', webinar=webinar, participants_data=participants_data)
+
 @app.route("/generate_certificates/<webinar_id>", methods=["GET", "POST"])
 def generate_certificates(webinar_id):
     webinar = Webinar.query.get_or_404(webinar_id)
+    webinar_name = ''.join([i.upper() for i in webinar.webinar_name if i.isalpha()])
+    webinar_organizer = ''.join([i.upper() for i in webinar.organizer if i.isalpha()])
+    # print(webinar_name, webinar_organizer)
+    webinar_serial=''
+    if len(webinar_name)>=3 and len(webinar_organizer) >=3:
+        webinar_serial = webinar_name[:3]+"."+webinar.date.replace('-','')+"."+webinar_organizer[:3]+".001"
+    elif len(webinar_name)<3 and len(webinar_organizer) <3:
+        webinar_serial = webinar_name+"."+webinar.date.replace('-','')+"."+webinar_organizer+".001"
+    elif len(webinar_name)<3:
+        webinar_serial = webinar_name+"."+webinar.date.replace('-','')+"."+webinar_organizer[:3]+".001"
+    elif len(webinar_organizer)<3:
+        webinar_serial = webinar_name[:3]+"."+webinar.date.replace('-','')+"."+webinar_organizer[:3]+".001"
+    else:
+        webinar_serial=''
+    # print(webinar_serial)
+
+    # Parsing every form datafield:
+    set_of_fields = parse_form_fields(webinar)
+                
 
     if 'username' not in session or session['username'] != webinar.creator.username:
         flash('You are not authorized to generate certificates.', 'error')
         return redirect(url_for('login'))
     
-
     if request.method == 'POST':
-        try:
-            passing_grade = float(request.form['passing_grade'])
-            passing_grade/=100
-            if passing_grade >100 or passing_grade<0:
-                raise ValueError
-        except ValueError:
-            flash('Invalid passing grade. Please enter a number between 0 and 100.', 'error')
-            return redirect(url_for('view_webinar', webinar_id=webinar_id))
-
+        
         if 'template' not in request.files or request.files['template'].filename == '':
             flash('No template file uploaded', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
 
         template_file = request.files['template']
+        webinar_serial = request.form['serial_number']
+        webinar.serial_number=webinar_serial
+        db.session.commit()
         if template_file and allowed_file(template_file.filename):
-            template_bytes = template_file.read()
+            filename = secure_filename(template_file.filename)
+            filepath = os.path.join('/tmp', filename)
+            template_file.save(filepath)
         else:
             flash('Invalid file format. Only PDF files are allowed.', 'error')
+            return redirect(url_for('view_webinar', webinar_id=webinar_id))
+        generate_qr = 'qr_generate' in request.form
+        qr_code_path = None
+        if generate_qr:
+            qr_data = url_for('certif_verif', webinar_id=webinar.id, _external=True)
+            qr = qrcode.make(qr_data)
+            qr_code_path = os.path.join('/tmp', f"{webinar.id}.png")
+            qr.save(qr_code_path)
+        
+        return redirect(url_for('generate_certificates_preview', webinar_id=webinar_id, file=filepath, filename=filename, generate_qr=generate_qr))
+    return render_template('generate_certificates.html', webinar=webinar, webinar_serial=webinar_serial)
+
+#TODO: Implement this page (name of certified participants)
+@app.route("/certif_verif/<webinar_id>")
+def certif_verif(webinar_id):
+    webinar = Webinar.query.get_or_404(webinar_id)
+    # Query to get participant details using certificate_id
+    # participants = Participant.query.filter_by(certificate_id=certificate_id).all()
+    # return render_template('certif_verif.html', participants=participants)
+    current_webinar = Webinar.query.get_or_404(webinar_id)
+    if 'username' not in session or session['username'] != current_webinar.creator.username:
+        flash('You are not authorized to view the webinar.', 'error')
+        return redirect(url_for('login'))
+    webinar = Webinar.query.get_or_404(webinar_id)
+
+    certified_participants = json.loads(webinar.certified_participants)
+    participants_data = [{'form_name': name, 'data': {}} for name, email in certified_participants]
+
+    return render_template('certif_verif.html', webinar=webinar, participants_data=participants_data)
+
+@app.route("/generate_certificates_preview/<webinar_id>", methods=["GET", "POST"])
+def generate_certificates_preview(webinar_id):
+    webinar = Webinar.query.get_or_404(webinar_id)
+    filepath = request.args.get('file')
+    filename = request.args.get('filename').strip('.pdf')
+    generate_qr = request.args.get('generate_qr', 'false').lower() == 'true'
+    print(filepath)
+    if not os.path.exists(filepath):
+        return "File not found", 404
+
+    # Convert the first page of the PDF to an image
+    doc = fitz.open(filepath)
+    page = doc.load_page(0)
+    pix = page.get_pixmap()
+    image_path = os.path.join('/tmp', f"{filename}_preview.png")
+    pix.save(image_path)
+    doc.close()
+
+    set_of_fields = parse_form_fields(webinar)
+    set_of_fields.add("Serial Number")
+    print(set_of_fields)
+
+    if request.method == 'POST':
+        text_data = request.form['text_data']
+        use_qr = request.form['use_qr']
+        qr_data=''
+        if use_qr == 'true':
+            qr_data = request.form['qr_data']
+        # text_data_list = json.loads(text_data)
+        try:
+            passing_grade = float(request.form['passing_grade'])
+            print(passing_grade)
+            passing_grade/=100
+            if passing_grade >100 or passing_grade<0:
+                raise ValueError
+        except ValueError:
+            flash('Invalid passing grade. Please enter a number between 0 and 100.', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
         
         try:
@@ -265,61 +468,26 @@ def generate_certificates(webinar_id):
         except ValueError:
             flash('Invalid font size, please enter a number', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
-
-        register_forms = Form.query.filter(Form.event == webinar, Form.type == 'register').all()
-        absence_forms = Form.query.filter(Form.event == webinar, Form.type == 'absence').all()
-        registered = set()
-        temp_attended = dict()
-        participants = set()
-
-        for form in register_forms:
-            submissions = Submission.query.filter_by(form_id=form.id).all()
-            for submission in submissions:
-                data = json.loads(submission.data)
-                count = 0
-                for i in data:
-                    if count == 0:
-                        name = i
-                    if count == 1:
-                        email = i
-                    count += 1
-                registered.add((data[name], data[email]))
-
-        for form in absence_forms:
-            submissions = Submission.query.filter_by(form_id=form.id).all()
-            for submission in submissions:
-                data = json.loads(submission.data)
-                count = 0
-                for i in data:
-                    if count == 0:
-                        name = i
-                    if count == 1:
-                        email = i
-                    count += 1
-                person = (data[name], data[email])
-                if person in temp_attended:
-                    temp_attended[person] += 1
-                else:
-                    temp_attended[person] = 1
-        
-        # Calculate attendance percentage and determine who passed
-        for person in registered:
-            attendance_count = temp_attended.get(person, 0)
-            total_absence_forms = len(absence_forms)
-            if total_absence_forms > 0 and (attendance_count / total_absence_forms) >= passing_grade:
-                participants.add(person)
-            elif total_absence_forms == 0:
-                participants.add(person)
-        
         # Generate certificates for participants in both sets
         in_memory_zip = io.BytesIO()
         input_method = request.form['input_method']
-        x_coordinate = float(request.form['x_coordinate']) if input_method == 'coordinates' else None
-        y_coordinate = float(request.form['y_coordinate']) if input_method == 'coordinates' else None
         
+        participants = get_participant_data(webinar, passing_grade=passing_grade)
+        print("participants::: ", participants)
+        webinar.certified_participants = json.dumps(list(participants))
+        db.session.commit()
+        serial_list = generate_serial_numbers(len(participants))
+        qr_image_path, qr_data, qr_x, qr_y, qr_size = '', '', None, None, None
+        if use_qr=='true':
+            qr_image_path = os.path.join('/tmp', f"{webinar_id}.png")
+            
+    
+
         with zipfile.ZipFile(in_memory_zip, 'w') as zipf:
+            series_counter = 0
             for name, email in participants:
-                doc = fitz.open(stream=template_bytes, filetype="pdf")
+                print(name, email)
+                doc = fitz.open(filepath)
                 page = doc[0]
 
                 if input_method == 'placeholder':
@@ -333,61 +501,65 @@ def generate_certificates(webinar_id):
                         text_x = rect.x0 + (rect.width - text_width) / 2 + 4
                         text_y = rect.y0 + rect.height / 2 + 4 
                         page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
-                elif x_coordinate is not None and y_coordinate is not None:
-                    if x_coordinate<0 or y_coordinate<0:
-                        flash('Invalid coordinates.', 'error')
-                        return redirect(url_for('generate_certificates', webinar_id=webinar_id))
+                else:
                     font = page.insert_font("Helvetica")
-                    text_x = x_coordinate - (stringWidth(name, "Helvetica", font_size)/2)
-                    text_y = y_coordinate
-                    page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
+                    text_data_list = json.loads(text_data)
+                    print(text_data)
+                    page_rect = page.rect
+                    max_x = page_rect.width  # Maximum width of the page
+                    max_y = page_rect.height
+                    for item in text_data_list:
+                        text_x = item['x'] * max_x
+                        text_y = item['y'] * max_y
+                        print(text_x, text_y)
+                        text = item['text']
+                        if text == "Serial Number":
+                            serial = webinar.serial_number
+                            idx = serial.rfind('.')
+                            serial = webinar.serial_number[:idx]
+                            serial = serial + serial_list[series_counter]
+                            len(participants)
+                            series_counter+=1
+                            page.insert_text((text_x, text_y), serial, font_size, color=(0, 0, 0))
+                        else:
+                            insert_data = get_specific_user_data(webinar, participants, text, name, email)
+                            print(text)
+                            print(insert_data)
+
+                            page.insert_text((text_x, text_y), insert_data, font_size, color=(0, 0, 0))
+                if os.path.exists(qr_image_path) and use_qr=='true':
+                    qr_data = json.loads(request.form['qr_data'])
+                    print(qr_data)
+                    qr_x = qr_data['x']
+                    qr_y = qr_data['y']
+                    qr_size = qr_data['size']
+                    with open(qr_image_path, "rb") as qr_image_file:
+                        qr_image = qr_image_file.read()
+
+                    page_rect = page.rect
+                    x_coor = page_rect.width  # Maximum width of the page
+                    y_coor = page_rect.height
+                    qr_x *= x_coor
+                    qr_y *= y_coor
+
+                    # Define the rectangle for placing the QR code (fitz.Rect)
+                    qr_rect = fitz.Rect(qr_x, qr_y, qr_x + qr_size, qr_y + qr_size)
+                    
+                    # Insert the QR code image into the PDF at the specified rectangle
+                    try:
+                        page.insert_image(qr_rect, stream=qr_image)
+                    except Exception as e:
+                        print(f"Failed to insert QR code: {e}")
+                    print(f"QR code path: {qr_image_path}")
 
                 pdf_buffer = io.BytesIO(doc.write())
                 zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
+                doc.close()
     
         in_memory_zip.seek(0)
     
         return send_file(in_memory_zip, download_name="certificates.zip", as_attachment=True)
-    return render_template('generate_certificates.html', webinar=webinar)
-
-@app.route("/generate_certificates_preview/<webinar_id>", methods=["POST"])
-def generate_certificates_preview(webinar_id):
-    if 'template' not in request.files or request.files['template'].filename == '':
-        return "No template file uploaded", 400
-
-    template_file = request.files['template']
-    if not allowed_file(template_file.filename):
-        return "Invalid file format. Only PDF files are allowed.", 400
-
-    template_bytes = template_file.read()
-
-    try:
-        x_coordinate = float(request.form['x_coordinate'])
-        y_coordinate = float(request.form['y_coordinate'])
-        if x_coordinate < 0 or y_coordinate < 0:
-            raise ValueError
-    except ValueError:
-        flash('Invalid coordinates', 'error')
-        return redirect(url_for('generate_certificates', webinar_id=webinar_id))
-    
-    try:
-        font_size = float(request.form['font_size'])
-        if font_size <=0:
-            raise ValueError
-    except ValueError:
-        flash('Invalid font size, please enter a number', 'error')
-        return redirect(url_for('generate_certificates', webinar_id=webinar_id))
-
-    doc = fitz.open(stream=template_bytes, filetype="pdf")
-    page = doc[0]
-
-    font = page.insert_font("Helvetica")
-    text_x = x_coordinate - (stringWidth("Your Text Here", "Helvetica", font_size)/2)
-    text_y = y_coordinate
-    page.insert_text((text_x, text_y), "Your Text Here", font_size, color=(0, 0, 0))
-
-    pdf_buffer = io.BytesIO(doc.write())
-    return send_file(io.BytesIO(pdf_buffer.getvalue()), mimetype='application/pdf')
+    return render_template('generate_certificates_preview.html', webinar=webinar, image_url='/static/uploads/'+filename+'_preview.png',file=filepath, filename=filename, set_of_fields=set_of_fields, generate_qr=generate_qr)
 
 @app.route('/form/<form_id>', methods=['GET'])
 def view_form(form_id):
@@ -404,7 +576,7 @@ def submit_form(form_id):
     db.session.add(new_submission)
     db.session.commit()
     
-    return 'Form submitted successfully!'
+    return render_template('submitted.html')
 
 @app.route("/delete_form/<form_id>", methods=["POST"])
 def delete_form(form_id):
@@ -414,12 +586,11 @@ def delete_form(form_id):
         return redirect(url_for('login'))
     
     form = Form.query.get_or_404(form_id)
-    webinar = form.event  # Get the associated webinar
+    webinar = form.event 
     if session['username'] != webinar.creator.username:
         flash('You are not authorized to delete this form.', 'error')
         return redirect(url_for('view_webinar', webinar_id=webinar.id))
 
-    # Delete all submissions related to this form
     submissions = Submission.query.filter_by(form_id=form.id).all()
     for submission in submissions:
         db.session.delete(submission)
@@ -459,6 +630,133 @@ def logout():
     session.pop('username', None)
     flash('You have been logged out.', 'success')
     return redirect(url_for('home'))
+
+# Will return a set of form fields
+def parse_form_fields(webinar):
+    register_forms = Form.query.filter(Form.event == webinar, Form.type == 'register').all()
+    absence_forms = Form.query.filter(Form.event == webinar, Form.type == 'absence').all()
+    all_fields = set()
+
+    for form in register_forms:
+        fields=json.loads(form.fields)
+        for field in fields:
+            if field['type'] == 'file':
+                pass
+            else:
+                all_fields.add(field['label'])
+    
+    for form in absence_forms:
+        fields=json.loads(form.fields)
+        for field in fields:
+            if field['type'] == 'file':
+                pass
+            else:
+                all_fields.add(field['label'])
+    return all_fields
+
+def get_form_fields(form):
+    all_fields = set()
+    fields=json.loads(form.fields)
+    for field in fields:
+        if field['type'] == 'file':
+            pass
+        else:
+            all_fields.add(field['label'])
+    return all_fields
+
+def form_has_field(form, field_name):
+    """
+    Check if a form has a specific field by its name.
+    """
+    fields = get_form_fields(form)
+    return field_name in fields
+
+# TODO: get participant whole data
+def get_specific_user_data(webinar, participants, field_name, name, email):
+
+    # All forms for the webinar
+    all_forms = Form.query.filter(Form.event == webinar).all()
+
+    # Go through each participant and find the data
+    found = False
+    for form in all_forms:
+        # Check if the form has the desired field
+        if form_has_field(form, field_name):
+            submissions = Submission.query.filter_by(form_id=form.id).all()
+            for submission in submissions:
+                data = json.loads(submission.data)
+                count = 0
+                for i in data:
+                    if count == 0:
+                        judul_name = i
+                    if count == 1:
+                        judul_email = i
+                    count += 1
+                # Check if this submission matches the user
+                if data[judul_name] == name and data[judul_email] == email:
+                    # If the field is in this submission, save it
+                    if field_name in data:
+                        return data[field_name]
+    return None
+
+
+def get_participant_data(webinar, passing_grade=0):
+    register_forms = Form.query.filter(Form.event == webinar, Form.type == 'register').all()
+    absence_forms = Form.query.filter(Form.event == webinar, Form.type == 'absence').all()
+    registered = set()
+    temp_attended = dict()
+    participants = set()
+
+    for form in register_forms:
+        submissions = Submission.query.filter_by(form_id=form.id).all()
+        for submission in submissions:
+            data = json.loads(submission.data)
+            count = 0
+            for i in data:
+                if count == 0:
+                    name = i
+                if count == 1:
+                    email = i
+                count += 1
+            registered.add((data[name], data[email]))
+
+    for form in absence_forms:
+        submissions = Submission.query.filter_by(form_id=form.id).all()
+        for submission in submissions:
+            data = json.loads(submission.data)
+            count = 0
+            for i in data:
+                if count == 0:
+                    name = i
+                if count == 1:
+                    email = i
+                count += 1
+            person = (data[name], data[email])
+            if person in temp_attended:
+                temp_attended[person] += 1
+            else:
+                temp_attended[person] = 1
+    
+    # Calculate attendance percentage and determine who passed
+    for person in registered:
+        attendance_count = temp_attended.get(person, 0)
+        total_absence_forms = len(absence_forms)
+        if total_absence_forms > 0 and (attendance_count / total_absence_forms) >= passing_grade:
+            participants.add(person)
+        elif total_absence_forms == 0:
+            participants.add(person)
+    return participants
+
+def generate_serial_numbers(participants_count):
+    max_length = len(str(participants_count))
+    serial_numbers = []
+    
+    for i in range(1, participants_count + 1):
+        serial_number = str(i).zfill(max_length)
+        serial_numbers.append(serial_number)
+    
+    return serial_numbers
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8081, debug=True)

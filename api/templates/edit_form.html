@@ -21,32 +21,17 @@
             </div>
             <div id="fields-container">
                 <label for="name" class="block text-gray-700">Field Names & Types:</label>
-                <div class="flex space-x-2 mb-2">
-                    <input type="text" name="fields[0][label]" value="Name" readonly class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed">
-                    <select name="fields[0][type]" class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed" disabled>
-                        <option value="text">Text</option>
-                    </select>
-                </div>
-                <div class="flex space-x-2 mb-2">
-                    <input type="text" name="fields[1][label]" value="Email" readonly class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed">
-                    <select name="fields[1][type]" class="p-2 border rounded-md flex-1 bg-gray-100 cursor-not-allowed" disabled>
-                        <option value="email">Email</option>
-                    </select>
-                </div>
                 {% for index, field in enumerate(fields) %}
-                    {% if index>1 %}
-                    
-                        <div class="flex space-x-2 mb-2">
-                            <input type="text" id="fields[{{ index }}][label]" name="fields[{{ index }}][label]" value="{{ field.label }}" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">                    
-                            <select id="fields[{{ index }}][type]" name="fields[{{ index }}][type]" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
-                                <option value="text" {% if field.type == 'text' %}selected{% endif %}>Text</option>
-                                <option value="email" {% if field.type == 'email' %}selected{% endif %}>Email</option>
-                                <option value="number" {% if field.type == 'number' %}selected{% endif %}>Number</option>
-                                <option value="file" {% if field.type == 'file' %}selected{% endif %}>File</option>
-                            </select>
-                            <button type="button" class="bg-red-500 text-white p-2 rounded-md hover:bg-red-700" onclick="removeField(this)">Remove</button>
-                        </div>
-                    {% endif %}
+                    <div class="flex space-x-2 mb-2">
+                        <input type="text" id="fields[{{ index }}][label]" name="fields[{{ index }}][label]" value="{{ field.label }}" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">                    
+                        <select id="fields[{{ index }}][type]" name="fields[{{ index }}][type]" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+                            <option value="text" {% if field.type == 'text' %}selected{% endif %}>Text</option>
+                            <option value="email" {% if field.type == 'email' %}selected{% endif %}>Email</option>
+                            <option value="number" {% if field.type == 'number' %}selected{% endif %}>Number</option>
+                            <option value="file" {% if field.type == 'file' %}selected{% endif %}>File</option>
+                        </select>
+                        <button type="button" class="bg-red-500 text-white p-2 rounded-md hover:bg-red-700" onclick="removeField(this)">Remove</button>
+                    </div>
                 {% endfor %}
             </div>
             <button type="button" onclick="addField()" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-700 transition duration-300">+ Add Field</button>

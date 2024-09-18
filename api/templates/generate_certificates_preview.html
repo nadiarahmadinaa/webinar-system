@@ -1,0 +1,287 @@
+{% extends "welcome.html" %}
+
+{% block title %}Generate Certificates{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+<div class="bg-white p-8 rounded-lg shadow-lg mt-8 mx-auto max-w-4xl">
+    <h1 class="text-3xl font-bold mb-4 text-center">Generate Certificates for "{{ webinar.webinar_name }}"</h1>
+
+    <!-- Container for PDF image -->
+    <div id="imageContainer" class="relative">
+        <img src="{{ image_url }}" id="pdf-image" class="w-full h-auto">
+        {% if generate_qr %}
+        <div id="qrSquare" class="absolute border border-dashed border-gray-700 text-center flex justify-center items-center cursor-move" style="width: 150px; height: 150px;">
+            <span><img src="{{ url_for('static', filename='qr/' + webinar.id|string + '.png') }}" id="qr-image" class="resize-drag draggable"></span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if generate_qr %}
+    <div class="pane relative mt-4">
+        <h2 class="text-lg font-semibold mb-2">QR Code Size</h2>
+        <input type="range" id="qrSizeSlider" min="50" max="450" value="150" class="w-full cursor-pointer">
+    </div>
+    {% endif %}
+
+    <!-- Dropdown to select text -->
+    <div class="my-4">
+        <label for="textSelect" class="block text-lg font-medium text-gray-700">Select Text to Add:</label>
+        <select id="textSelect" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">Select text</option>
+            {% for field in set_of_fields %}
+            <option value="{{ field }}">{{ field }}</option>
+            {% endfor %}
+        </select><br>
+        <button type="button" onclick="addText()" class="inline-block bg-blue-500 text-white p-2 rounded-md hover:bg-blue-700 transition duration-300 font-bold w-full rounded">Add Text</button>
+    </div>
+
+    <button type="button" onclick="submitTextPositions()" class="inline-block bg-green-500 text-white p-2 rounded-md hover:bg-green-700 transition duration-300 font-bold w-full rounded">Submit Text Positions</button>
+
+    <!-- Certificate form -->
+    <form id="certificate-form" action="{{ url_for('generate_certificates_preview', webinar_id=webinar.id, file=file, filename=filename) }}" method="post" enctype="multipart/form-data" class="mt-6">
+        <input type="hidden" id="use_qr" name="use_qr" value="{{ 'true' if generate_qr else 'false' }}">
+        {% if generate_qr %}
+        <input type="hidden" id="qr_data" name="qr_data">
+        {% endif %}
+        <input type="hidden" id="text_data" name="text_data">
+
+        <!-- Absence checkbox -->
+        <div class="mb-4">
+            <label for="use_passing_grade" class="block text-lg font-medium text-gray-700">Count Participants' Absence</label>
+            <input type="checkbox" id="use_passing_grade" name="use_passing_grade" class="mt-2" onclick="toggleAbsenceRateInput()">
+        </div>
+
+        <!-- Passing grade input -->
+        <div id="passing_grade" class="mb-4 hidden">
+            <label for="input_passing_grade" class="block text-lg font-medium text-gray-700">Absence Passing Grade (%)</label>
+            <input type="text" id="input_passing_grade" name="passing_grade" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="0">
+        </div>
+
+        <!-- Font size input -->
+        <div class="mb-4">
+            <label for="font_size" class="block text-lg font-medium text-gray-700">Font Size Replacement</label>
+            <input type="text" id="font_size" name="font_size" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+
+        <!-- Input method radio buttons -->
+        <div class="mb-4">
+            <label class="block text-lg font-medium text-gray-700">Input Method</label>
+            <div class="mt-2">
+                <input type="radio" id="input_method_placeholder" name="input_method" value="placeholder" checked class="mr-2">
+                <label for="input_method_placeholder">Placeholder</label>
+                <input type="radio" id="input_method_coordinates" name="input_method" value="coordinates" class="ml-4 mr-2">
+                <label for="input_method_coordinates">Coordinates</label>
+            </div>
+        </div>
+
+        <!-- Placeholder input -->
+        <div id="placeholder_input" class="mb-4">
+            <label for="placeholder" class="block text-lg font-medium text-gray-700">Placeholder for name</label>
+            <input type="text" id="placeholder" name="placeholder" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+
+        <!-- Submit button -->
+        <div class="mx-auto text-center mt-6">
+            <button type="submit" class=" bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Generate Certificates</button>
+        </div>
+    </form>
+
+    <!-- Go Back button -->
+    <div class="mx-auto text-center mt-6">
+        {% if generate_qr %}
+        <a href="{{ url_for('certif_verif', webinar_id=webinar.id) }}" class="inline-block bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Visit QR Link</a>
+        {% endif %}
+        <a href="{{ url_for('view_webinar', webinar_id=webinar.id) }}" class="inline-block bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">Go Back</a>
+    </div>
+</div>
+
+
+<script>
+let draggingElement = null;
+let dragging = false;
+let offsetX = 0;
+let offsetY = 0;
+
+function addText() {
+    const select = document.getElementById('textSelect');
+    const text = select.value;
+    if (text.trim() === '') {
+        alert('Please select some text.');
+        return;
+    }
+
+    const textElement = document.createElement('div');
+    textElement.className = 'draggable-text absolute';
+    textElement.style.left = '50%';
+    textElement.style.top = '50%';
+    textElement.style.transform = 'translate(-50%, -50%)';
+    textElement.textContent = text;
+
+    document.getElementById('imageContainer').appendChild(textElement);
+
+    textElement.addEventListener('mousedown', function(event) {
+        draggingElement = textElement;
+        dragging = true;
+    });
+
+    document.addEventListener('mousemove', function(event) {
+        if (dragging) {
+            const rect = document.getElementById('imageContainer').getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            draggingElement.style.left = `${mouseX}px`;
+            draggingElement.style.top = `${mouseY}px`;
+        }
+    });
+
+    document.addEventListener('mouseup', function(event) {
+        dragging = false;
+        draggingElement = null;
+    });
+}
+// Add event listeners for dragging the QR code
+const qrSquare = document.getElementById('qrSquare');
+const qrSlider = document.getElementById('qrSizeSlider');
+const imageContainer = document.getElementById('imageContainer');
+
+// Position the QR square in the center of the imageContainer
+function centerQrSquare() {
+    const containerRect = imageContainer.getBoundingClientRect();
+    const squareSize = parseInt(qrSlider.value);
+    const left = (containerRect.width - squareSize) / 2;
+    const top = (containerRect.height - squareSize) / 2;
+    qrSquare.style.left = `${left}px`;
+    qrSquare.style.top = `${top}px`;
+}
+
+// Call the function to center the QR square initially
+centerQrSquare();
+
+// Make the QR square draggable within the container
+qrSquare.addEventListener('mousedown', function(event) {
+    draggingElement = qrSquare;
+    dragging = true;
+    const rect = qrSquare.getBoundingClientRect();
+    offsetX = event.clientX - rect.left;
+    offsetY = event.clientY - rect.top;
+});
+
+document.addEventListener('mousemove', function(event) {
+    if (dragging && draggingElement) {
+        const containerRect = imageContainer.getBoundingClientRect();
+        const elementRect = draggingElement.getBoundingClientRect();
+
+        let mouseX = event.clientX - containerRect.left - offsetX;
+        let mouseY = event.clientY - containerRect.top - offsetY;
+
+        // Constrain movement within the image container
+        mouseX = Math.max(0, Math.min(mouseX, containerRect.width - elementRect.width));
+        mouseY = Math.max(0, Math.min(mouseY, containerRect.height - elementRect.height));
+
+        draggingElement.style.left = `${mouseX}px`;
+        draggingElement.style.top = `${mouseY}px`;
+    }
+});
+
+document.addEventListener('mouseup', function() {
+    dragging = false;
+    draggingElement = null;
+});
+
+// Handle QR code size adjustment
+qrSlider.addEventListener('input', function(event) {
+    const newSize = event.target.value;
+    qrSquare.style.width = `${newSize}px`;
+    qrSquare.style.height = `${newSize}px`;
+
+    // Adjust position to keep it within bounds
+    const containerRect = imageContainer.getBoundingClientRect();
+    const elementRect = qrSquare.getBoundingClientRect();
+
+    let left = parseFloat(qrSquare.style.left);
+    let top = parseFloat(qrSquare.style.top);
+
+    left = Math.max(0, Math.min(left, containerRect.width - elementRect.width));
+    top = Math.max(0, Math.min(top, containerRect.height - elementRect.height));
+
+    qrSquare.style.left = `${left}px`;
+    qrSquare.style.top = `${top}px`;
+
+    updateQrPositionSize();
+});
+
+function updateQrPositionSize() {
+    const rect = qrSquare.getBoundingClientRect();
+    const containerRect = imageContainer.getBoundingClientRect();
+    const x = (rect.left - containerRect.left) / containerRect.width;
+    const y = (rect.top - containerRect.top) / containerRect.height;
+    const size = parseInt(qrSlider.value);
+
+    const qrData = {
+        x: x, 
+        y: y, 
+        size: size
+    };
+    document.getElementById('qr_data').value = JSON.stringify(qrData);
+    const p = JSON.stringify(qrData);
+    // alert(p);
+
+}
+
+function submitTextPositions() {
+    const textElements = document.querySelectorAll('.draggable-text');
+    const textData = [];
+
+    textElements.forEach(element => {
+        const rect = element.getBoundingClientRect();
+        const containerRect = document.getElementById('imageContainer').getBoundingClientRect();
+        // alert(rect.left);
+        const x = (rect.left - containerRect.left)/ containerRect.width;
+        const y = (rect.top - containerRect.top)/ containerRect.height;
+        const text = element.textContent;
+
+        textData.push({ text: text, x: x, y: y });
+        // alert(textData);
+    });
+
+    const jsonData = JSON.stringify(textData);
+    // alert(jsonData);
+
+    // Set the JSON string as the value of the hidden input field
+    document.getElementById('text_data').value = jsonData;
+}
+
+function toggleAbsenceRateInput() {
+    const absenceRateInput = document.getElementById('passing_grade');
+    const checkbox = document.getElementById('use_passing_grade');
+    if (checkbox.checked) {
+        absenceRateInput.classList.remove('hidden');
+    } else {
+        document.getElementById('input_passing_grade').value = 0;
+        absenceRateInput.classList.add('hidden');
+    }
+}
+
+function toggleInputMethod() {
+    const placeholderInput = document.getElementById('placeholder_input');
+    const coordinatesInput = document.getElementById('coordinates_input');
+    const inputMethod = document.querySelector('input[name="input_method"]:checked').value;
+
+    if (inputMethod === 'placeholder') {
+        placeholderInput.classList.remove('hidden');
+        coordinatesInput.classList.add('hidden');
+    } else {
+        placeholderInput.classList.add('hidden');
+        coordinatesInput.classList.remove('hidden');
+    }
+}
+document.getElementById('certificate-form').addEventListener('submit', function() {
+    updateQrPositionSize();
+    submitTextPositions();
+});
+</script>
+{% endblock %}
