@@ -29,6 +29,7 @@
 
     <!-- Dropdown to select text -->
     <div class="my-4">
+        <h2 class="text-lg font-semibold mb-2">Drag and drop your text</h2>
         <label for="textSelect" class="block text-lg font-medium text-gray-700">Select Text to Add:</label>
         <select id="textSelect" class="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
             <option value="">Select text</option>
@@ -49,18 +50,6 @@
         {% endif %}
         <input type="hidden" id="text_data" name="text_data">
 
-        <!-- Absence checkbox -->
-        <div class="mb-4">
-            <label for="use_passing_grade" class="block text-lg font-medium text-gray-700">Count Participants' Absence</label>
-            <input type="checkbox" id="use_passing_grade" name="use_passing_grade" class="mt-2" onclick="toggleAbsenceRateInput()">
-        </div>
-
-        <!-- Passing grade input -->
-        <div id="passing_grade" class="mb-4 hidden">
-            <label for="input_passing_grade" class="block text-lg font-medium text-gray-700">Absence Passing Grade (%)</label>
-            <input type="text" id="input_passing_grade" name="passing_grade" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="0">
-        </div>
-
         <!-- Font size input -->
         <div class="mb-4">
             <label for="font_size" class="block text-lg font-medium text-gray-700">Font Size Replacement</label>
@@ -71,17 +60,36 @@
         <div class="mb-4">
             <label class="block text-lg font-medium text-gray-700">Input Method</label>
             <div class="mt-2">
-                <input type="radio" id="input_method_placeholder" name="input_method" value="placeholder" checked class="mr-2">
-                <label for="input_method_placeholder">Placeholder</label>
-                <input type="radio" id="input_method_coordinates" name="input_method" value="coordinates" class="ml-4 mr-2">
-                <label for="input_method_coordinates">Coordinates</label>
+                <input type="radio" id="input_method_placeholder" name="input_method" value="placeholder" onchange="toggleInputMethod()" checked class="mr-2">
+                <label for="input_method_placeholder">Use placeholder too</label>
+                <input type="radio" id="input_method_coordinates" name="input_method" value="coordinates" onchange="toggleInputMethod()" class="ml-4 mr-2">
+                <label for="input_method_coordinates">Drag and drop only</label>
             </div>
         </div>
 
         <!-- Placeholder input -->
-        <div id="placeholder_input" class="mb-4">
-            <label for="placeholder" class="block text-lg font-medium text-gray-700">Placeholder for name</label>
-            <input type="text" id="placeholder" name="placeholder" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        <div id="placeholder_input" class="mb-4"><br>
+            <!-- Placeholder inputs for each field -->
+            <div id="placeholder_fields" class="mb-4">
+                <h2 class="text-lg font-semibold mb-4">Placeholders</h2>
+                <button type="button" onclick="addPlaceholderField()" 
+                    class="inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-300 font-bold w-full mb-4">
+                    Add Placeholder
+                </button>
+            </div>
+        </div>
+        <input type="hidden" id="placeholder" name="placeholder">
+
+        <!-- Absence checkbox -->
+        <div class="mb-4">
+            <label for="use_passing_grade" class="block text-lg font-medium text-gray-700">Count Participants' Absence</label>
+            <input type="checkbox" id="use_passing_grade" name="use_passing_grade" class="mt-2" onclick="toggleAbsenceRateInput()">
+        </div>
+
+        <!-- Passing grade input -->
+        <div id="passing_grade" class="mb-4 hidden">
+            <label for="input_passing_grade" class="block text-lg font-medium text-gray-700">Absence Passing Grade (%)</label>
+            <input type="text" id="input_passing_grade" name="passing_grade" required class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" value="0">
         </div>
 
         <!-- Submit button -->
@@ -255,6 +263,75 @@ function submitTextPositions() {
     document.getElementById('text_data').value = jsonData;
 }
 
+function addPlaceholderField() {
+    const placeholderFieldsContainer = document.getElementById('placeholder_fields');
+
+    // Create a new div for the field
+    const newFieldDiv = document.createElement('div');
+    newFieldDiv.className = 'flex space-x-2 mb-2';
+
+    // Create a select dropdown for the field
+    const select = document.createElement('select');
+    select.classList.add('block', 'p-2', 'border', 'border-gray-300', 'rounded-md', 'shadow-sm');
+    select.innerHTML = `{% for field in set_of_fields %}<option value="{{ field }}">{{ field }}</option>{% endfor %}`;
+
+    // Create an input for the placeholder text
+    const input = document.createElement('input');
+    input.classList.add('mt-2', 'block', 'p-2', 'border', 'border-gray-300', 'rounded-md', 'shadow-sm');
+    input.setAttribute('type', 'text');
+    input.setAttribute('placeholder', 'Enter placeholder text');
+
+    // Create a remove button
+    const removeButton = document.createElement('button');
+    removeButton.classList.add('bg-red-500', 'text-white', 'p-2', 'rounded-md', 'hover:bg-red-700', 'transition', 'duration-300', 'font-bold', 'mt-2');
+    removeButton.textContent = 'Remove';
+    removeButton.type = 'button';
+    removeButton.onclick = function () {
+        placeholderFieldsContainer.removeChild(newFieldDiv);
+        updatePlaceholderData();  // Update JSON when a field is removed
+    };
+
+    // Append the select, input, and remove button to the new field div
+    newFieldDiv.appendChild(select);
+    newFieldDiv.appendChild(input);
+    newFieldDiv.appendChild(removeButton);
+
+    // Append the new field div to the placeholder fields container
+    placeholderFieldsContainer.appendChild(newFieldDiv);
+
+    // Update the hidden input value after adding a new field
+}
+
+function updatePlaceholderData() {
+    const placeholders = [];
+    const placeholderFieldsContainer = document.getElementById('placeholder_fields');
+    
+    // Query all child divs directly within the placeholder_fields container
+    const fields = placeholderFieldsContainer.querySelectorAll('div');
+
+    fields.forEach(field => {
+        const selectElement = field.querySelector('select');
+        const inputElement = field.querySelector('input');
+
+        if (selectElement && inputElement) { // Ensure the elements exist
+            const selectValue = selectElement.value;
+            const inputValue = inputElement.value;
+
+            if (selectValue && inputValue) { // Only push non-empty values
+                placeholders.push({
+                    field: selectValue,
+                    placeholder: inputValue
+                });
+            }
+        }
+    });
+
+    // Store the JSON string in the hidden input field
+    const hiddenInput = document.getElementById('placeholder');
+    hiddenInput.value = JSON.stringify(placeholders);
+    // alert(JSON.stringify(placeholders));
+}
+
 function toggleAbsenceRateInput() {
     const absenceRateInput = document.getElementById('passing_grade');
     const checkbox = document.getElementById('use_passing_grade');
@@ -282,6 +359,7 @@ function toggleInputMethod() {
 document.getElementById('certificate-form').addEventListener('submit', function() {
     updateQrPositionSize();
     submitTextPositions();
+    updatePlaceholderData();
 });
 </script>
 {% endblock %}

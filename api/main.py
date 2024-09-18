@@ -492,41 +492,45 @@ def generate_certificates_preview(webinar_id):
 
                 if input_method == 'placeholder':
                     placeholder = request.form['placeholder']
-                    text_instances = page.search_for(placeholder)
-                    for inst in text_instances:
-                        rect = inst
-                        page.add_redact_annot(rect)
-                        page.apply_redactions()
-                        text_width = stringWidth(name, "Helvetica", font_size)
-                        text_x = rect.x0 + (rect.width - text_width) / 2 + 4
-                        text_y = rect.y0 + rect.height / 2 + 4 
-                        page.insert_text((text_x, text_y), name, font_size, color=(0, 0, 0))
-                else:
-                    font = page.insert_font("Helvetica")
-                    text_data_list = json.loads(text_data)
-                    print(text_data)
-                    page_rect = page.rect
-                    max_x = page_rect.width  # Maximum width of the page
-                    max_y = page_rect.height
-                    for item in text_data_list:
-                        text_x = item['x'] * max_x
-                        text_y = item['y'] * max_y
-                        print(text_x, text_y)
-                        text = item['text']
-                        if text == "Serial Number":
-                            serial = webinar.serial_number
-                            idx = serial.rfind('.')
-                            serial = webinar.serial_number[:idx]
-                            serial = serial + serial_list[series_counter]
-                            len(participants)
-                            series_counter+=1
-                            page.insert_text((text_x, text_y), serial, font_size, color=(0, 0, 0))
-                        else:
-                            insert_data = get_specific_user_data(webinar, participants, text, name, email)
-                            print(text)
-                            print(insert_data)
+                    print('placeholder: ', placeholder)
+                    placeholder_data = json.loads(placeholder)
+                    for data in placeholder_data:
+                        field = data['field']
+                        placeholder_text = data['placeholder']
+                        text_instances = page.search_for(placeholder_text)
+                        for inst in text_instances:
+                            rect = inst
+                            page.add_redact_annot(rect)
+                            page.apply_redactions()
+                            text_width = stringWidth(name, "Helvetica", font_size)
+                            text_x = rect.x0 + (rect.width - text_width) / 2 + 4
+                            text_y = rect.y0 + rect.height / 2 + 4 
+                            page.insert_text((text_x, text_y), get_specific_user_data(webinar,participants,field,name,email), font_size, color=(0, 0, 0))
+                font = page.insert_font("Helvetica")
+                text_data_list = json.loads(text_data)
+                print(text_data)
+                page_rect = page.rect
+                max_x = page_rect.width  # Maximum width of the page
+                max_y = page_rect.height
+                for item in text_data_list:
+                    text_x = item['x'] * max_x
+                    text_y = item['y'] * max_y
+                    print(text_x, text_y)
+                    text = item['text']
+                    if text == "Serial Number":
+                        serial = webinar.serial_number
+                        idx = serial.rfind('.')
+                        serial = webinar.serial_number[:idx]
+                        serial = serial + serial_list[series_counter]
+                        len(participants)
+                        series_counter+=1
+                        page.insert_text((text_x, text_y), serial, font_size, color=(0, 0, 0))
+                    else:
+                        insert_data = get_specific_user_data(webinar, participants, text, name, email)
+                        print(text)
+                        print(insert_data)
 
-                            page.insert_text((text_x, text_y), insert_data, font_size, color=(0, 0, 0))
+                        page.insert_text((text_x, text_y), insert_data, font_size, color=(0, 0, 0))
                 if os.path.exists(qr_image_path) and use_qr=='true':
                     qr_data = json.loads(request.form['qr_data'])
                     print(qr_data)
