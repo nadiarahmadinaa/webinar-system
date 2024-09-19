@@ -4,6 +4,7 @@ from werkzeug.utils import secure_filename
 from flask_uploads import UploadSet, configure_uploads, DOCUMENTS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from string import punctuation
 import uuid
 import json
 import string
@@ -40,8 +41,8 @@ ALLOWED_EXTENSIONS = {'pdf'}
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'webinarsystem.app@gmail.com'
-app.config['MAIL_PASSWORD'] = 'm4iL_4_webinars'
+app.config['MAIL_USERNAME'] = ''
+app.config['MAIL_PASSWORD'] = ''
 mail = Mail(app)
 s = URLSafeTimedSerializer('gm5CgA9Hxwufdy4BWV')
 
@@ -101,6 +102,7 @@ def home():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    pattern = f"[{re.escape(string.punctuation)}]"
     if request.method == "POST":
         username = request.form['username']
         password = request.form['password']
@@ -111,7 +113,7 @@ def register():
         if len(password) < 8:
             flash('Password must be at least 8 characters long.', 'error')
             return redirect(url_for('register'))
-        if not re.search("[a-z]", password) or not re.search("[A-Z]", password) or not re.search("[0-9]", password) or not re.search("[@#$%^&+=]", password):
+        if not re.search("[a-z]", password) or not re.search("[A-Z]", password) or not re.search("[0-9]", password) or not re.search(pattern, password):
             flash('Password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character.', 'error')
             return redirect(url_for('register'))
         if User.query.filter_by(username=username).first():
@@ -473,7 +475,7 @@ def generate_certificates_preview(webinar_id):
         input_method = request.form['input_method']
         
         participants = get_participant_data(webinar, passing_grade=passing_grade)
-        print("participants::: ", participants)
+        # print("participants::: ", participants)
         webinar.certified_participants = json.dumps(list(participants))
         db.session.commit()
         serial_list = generate_serial_numbers(len(participants))
@@ -536,7 +538,7 @@ def generate_certificates_preview(webinar_id):
                     print(qr_data)
                     qr_x = qr_data['x']
                     qr_y = qr_data['y']
-                    qr_size = qr_data['size']
+                    qr_size = qr_data['size'] * 0,8
                     with open(qr_image_path, "rb") as qr_image_file:
                         qr_image = qr_image_file.read()
 
@@ -563,7 +565,7 @@ def generate_certificates_preview(webinar_id):
         in_memory_zip.seek(0)
     
         return send_file(in_memory_zip, download_name="certificates.zip", as_attachment=True)
-    return render_template('generate_certificates_preview.html', webinar=webinar, image_url='/static/uploads/'+filename+'_preview.png',file=filepath, filename=filename, set_of_fields=set_of_fields, generate_qr=generate_qr)
+    return render_template('generate_certificates_preview.html', webinar=webinar, image_url='/tmp/'+filename+'_preview.png',file=filepath, filename=filename, set_of_fields=set_of_fields, generate_qr=generate_qr)
 
 @app.route('/form/<form_id>', methods=['GET'])
 def view_form(form_id):

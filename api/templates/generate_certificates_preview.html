@@ -15,7 +15,7 @@
         <img src="{{ image_url }}" id="pdf-image" class="w-full h-auto">
         {% if generate_qr %}
         <div id="qrSquare" class="absolute border border-dashed border-gray-700 text-center flex justify-center items-center cursor-move" style="width: 150px; height: 150px;">
-            <span><img src="{{ url_for('static', filename='qr/' + webinar.id|string + '.png') }}" id="qr-image" class="resize-drag draggable"></span>
+            <span><img src="{{ url_for('static', filename='tmp/' + webinar.id|string + '.png') }}" id="qr-image" class="resize-drag draggable"></span>
         </div>
         {% endif %}
     </div>
