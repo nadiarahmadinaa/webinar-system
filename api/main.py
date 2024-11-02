@@ -8,8 +8,12 @@ from string import punctuation
 import uuid
 import json
 import string
+import boto3
 import zipfile
+import pdf2image
 import io
+import requests
+import tempfile
 import qrcode
 import os
 import re
@@ -27,8 +31,12 @@ import psycopg2
 import sqlalchemy.dialects.postgresql
 import tempfile
 import random
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 app = Flask(__name__)
+config = cloudinary.config(secure=True)
 app.secret_key = '263FEA1F87FC3FAA'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://default:8iXjK9CPdhev@ep-polished-salad-a1bgg5k2.ap-southeast-1.aws.neon.tech:5432/verceldb?sslmode=require"
@@ -37,6 +45,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOADED_DOCS_DEST'] = os.path.join(os.getcwd(), 'static', 'uploads')
 app.config['QR_CODES_DEST'] = os.path.join(os.getcwd(), 'static', 'qr')
 ALLOWED_EXTENSIONS = {'pdf'}
+cloudinary.config(cloud_name='djlgki5uf',api_key='159699198556667',api_secret='0FBq4h_wrXnQZ9PAsaylow1sen0')
 
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
@@ -385,25 +394,42 @@ def generate_certificates(webinar_id):
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
 
         template_file = request.files['template']
+        if template_file and allowed_file(template_file.filename):
+            images=pdf2image.convert_from_bytes(template_file.read())
+            image_bytes = io.BytesIO()
+            images[0].save(image_bytes, format='PNG')
+            image_bytes.seek(0)
+
+            response=cloudinary.uploader.upload(image_bytes, resource_type='image')
+            print("INIRESPONSE",response)
+            filepath = response['secure_url']
+            filename = response['display_name']
+        # else:
+        #     print("GAADA")
+
+        # if template_file and allowed_file(template_file.filename):
+        #     filename = secure_filename(template_file.filename)
+        #     filepath = os.path.join('/tmp', filename)
+        #     template_file.save(filepath)
+        else:
+            flash('Please upload a PNG file.', 'error')
+            return redirect(url_for('view_webinar', webinar_id=webinar_id))
         webinar_serial = request.form['serial_number']
         webinar.serial_number=webinar_serial
         db.session.commit()
-        if template_file and allowed_file(template_file.filename):
-            filename = secure_filename(template_file.filename)
-            filepath = os.path.join('/tmp', filename)
-            template_file.save(filepath)
-        else:
-            flash('Invalid file format. Only PDF files are allowed.', 'error')
-            return redirect(url_for('view_webinar', webinar_id=webinar_id))
         generate_qr = 'qr_generate' in request.form
-        qr_code_path = None
         if generate_qr:
             qr_data = url_for('certif_verif', webinar_id=webinar.id, _external=True)
             qr = qrcode.make(qr_data)
-            qr_code_path = os.path.join('/tmp', f"{webinar.id}.png")
-            qr.save(qr_code_path)
+            qr_bytes = io.BytesIO()
+            qr.save(qr_bytes, format='PNG')
+            qr_bytes.seek(0)
+            response=cloudinary.uploader.upload(qr_bytes, resource_type='image')
+            qr_url = response['secure_url']
+            # qr_code_path = os.path.join('/tmp', f"{webinar.id}.pdf")
+            # qr.save(qr_code_path)
         
-        return redirect(url_for('generate_certificates_preview', webinar_id=webinar_id, file=filepath, filename=filename, generate_qr=generate_qr))
+        return redirect(url_for('generate_certificates_preview', webinar_id=webinar_id, file=filepath, qr_url=qr_url, generate_qr=generate_qr))
     return render_template('generate_certificates.html', webinar=webinar, webinar_serial=webinar_serial)
 
 #TODO: Implement this page (name of certified participants)
@@ -427,20 +453,28 @@ def certif_verif(webinar_id):
 @app.route("/generate_certificates_preview/<webinar_id>", methods=["GET", "POST"])
 def generate_certificates_preview(webinar_id):
     webinar = Webinar.query.get_or_404(webinar_id)
-    filepath = request.args.get('file')
-    filename = request.args.get('filename').strip('.pdf')
+    file_url = request.args.get('file')
+    qr_url = request.args.get('qr_url')
+    if file_url:
+        response=requests.get(file_url)
+        if response.status_code == 200:
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            temp_file.write(response.content)
+            temp_file.close()
+            filepath = temp_file.name
+            filename = temp_file.name.split('/')[-1]
+        else:
+            flash('Failed to download the file from URL.', 'error')
+            return redirect(url_for('view_webinar', webinar_id=webinar_id))
     generate_qr = request.args.get('generate_qr', 'false').lower() == 'true'
-    print(filepath)
-    if not os.path.exists(filepath):
-        return "File not found", 404
 
-    # Convert the first page of the PDF to an image
-    doc = fitz.open(filepath)
-    page = doc.load_page(0)
-    pix = page.get_pixmap()
-    image_path = os.path.join('/tmp', f"{filename}_preview.png")
-    pix.save(image_path)
-    doc.close()
+    # # Convert the first page of the PDF to an image
+    # doc = fitz.open(filepath)
+    # page = doc.load_page(0)
+    # pix = page.get_pixmap()
+    # image_path = os.path.join('/tmp', f"{filename}_preview.png")
+    # pix.save(image_path)
+    # doc.close()
 
     set_of_fields = parse_form_fields(webinar)
     set_of_fields.add("Serial Number")
@@ -453,6 +487,7 @@ def generate_certificates_preview(webinar_id):
         if use_qr == 'true':
             qr_data = request.form['qr_data']
         # text_data_list = json.loads(text_data)
+
         try:
             passing_grade = float(request.form['passing_grade'])
             print(passing_grade)
@@ -471,6 +506,7 @@ def generate_certificates_preview(webinar_id):
             flash('Invalid font size, please enter a number', 'error')
             return redirect(url_for('view_webinar', webinar_id=webinar_id))
         # Generate certificates for participants in both sets
+
         in_memory_zip = io.BytesIO()
         input_method = request.form['input_method']
         
@@ -479,9 +515,14 @@ def generate_certificates_preview(webinar_id):
         webinar.certified_participants = json.dumps(list(participants))
         db.session.commit()
         serial_list = generate_serial_numbers(len(participants))
-        qr_image_path, qr_data, qr_x, qr_y, qr_size = '', '', None, None, None
+        qr_image, qr_stream, qr_data, qr_x, qr_y, qr_size = '','', '', None, None, None
+
         if use_qr=='true':
-            qr_image_path = os.path.join('/tmp', f"{webinar_id}.png")
+            url = request.form['qr_url']
+            response = requests.get(url)
+            response.raise_for_status()
+            qr_stream = io.BytesIO(response.content)
+            qr_image = Image.open(qr_stream)
             
     
 
@@ -489,7 +530,15 @@ def generate_certificates_preview(webinar_id):
             series_counter = 0
             for name, email in participants:
                 print(name, email)
-                doc = fitz.open(filepath)
+                file_urls = request.form['file_url']
+                response = requests.get(file_urls)
+                response.raise_for_status()
+                image_stream = io.BytesIO(response.content)
+                image = Image.open(image_stream)
+                pdf_stream = io.BytesIO()
+                image.convert("RGB").save(pdf_stream, format="PDF")
+                pdf_stream.seek(0)
+                doc = fitz.open(stream=pdf_stream, filetype="pdf")
                 page = doc[0]
 
                 if input_method == 'placeholder':
@@ -533,31 +582,30 @@ def generate_certificates_preview(webinar_id):
                         print(insert_data)
 
                         page.insert_text((text_x, text_y), insert_data, font_size, color=(0, 0, 0))
-                if os.path.exists(qr_image_path) and use_qr=='true':
+                if qr_image and use_qr=='true':
                     qr_data = json.loads(request.form['qr_data'])
                     print(qr_data)
                     qr_x = qr_data['x']
                     qr_y = qr_data['y']
-                    qr_size = qr_data['size'] * 0,8
-                    with open(qr_image_path, "rb") as qr_image_file:
-                        qr_image = qr_image_file.read()
+                    qr_size = qr_data['size']
 
                     page_rect = page.rect
                     x_coor = page_rect.width  # Maximum width of the page
                     y_coor = page_rect.height
                     qr_x *= x_coor
                     qr_y *= y_coor
+                    preview_width = float(request.form['preview_width'])
+                    scaling_factor = page_rect.width / preview_width
+                    qr_size_scaled = qr_data['size'] * scaling_factor
 
                     # Define the rectangle for placing the QR code (fitz.Rect)
-                    qr_rect = fitz.Rect(qr_x, qr_y, qr_x + qr_size, qr_y + qr_size)
+                    qr_rect = fitz.Rect(qr_x, qr_y, qr_x + qr_size_scaled, qr_y + qr_size_scaled)
                     
                     # Insert the QR code image into the PDF at the specified rectangle
                     try:
-                        page.insert_image(qr_rect, stream=qr_image)
+                        page.insert_image(qr_rect, stream=qr_stream)
                     except Exception as e:
                         print(f"Failed to insert QR code: {e}")
-                    print(f"QR code path: {qr_image_path}")
-
                 pdf_buffer = io.BytesIO(doc.write())
                 zipf.writestr(f"{name.replace(' ', '_')}_certificate.pdf", pdf_buffer.read())
                 doc.close()
@@ -565,7 +613,7 @@ def generate_certificates_preview(webinar_id):
         in_memory_zip.seek(0)
     
         return send_file(in_memory_zip, download_name="certificates.zip", as_attachment=True)
-    return render_template('generate_certificates_preview.html', webinar=webinar, image_url='/tmp/'+filename+'_preview.png',file=filepath, filename=filename, set_of_fields=set_of_fields, generate_qr=generate_qr)
+    return render_template('generate_certificates_preview.html', webinar=webinar, image_url=file_url, qr_url=qr_url, set_of_fields=set_of_fields, generate_qr=generate_qr)
 
 @app.route('/form/<form_id>', methods=['GET'])
 def view_form(form_id):
