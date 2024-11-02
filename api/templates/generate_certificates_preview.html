@@ -15,7 +15,7 @@
         <img src="{{ image_url }}" id="pdf-image" class="w-full h-auto">
         {% if generate_qr %}
         <div id="qrSquare" class="absolute border border-dashed border-gray-700 text-center flex justify-center items-center cursor-move" style="width: 150px; height: 150px;">
-            <span><img src="{{ url_for('static', filename='tmp/' + webinar.id|string + '.png') }}" id="qr-image" class="resize-drag draggable"></span>
+            <span><img src="{{ qr_url }}" id="qr-image" class="resize-drag draggable"></span>
         </div>
         {% endif %}
     </div>
@@ -43,10 +43,13 @@
     <button type="button" onclick="submitTextPositions()" class="inline-block bg-green-500 text-white p-2 rounded-md hover:bg-green-700 transition duration-300 font-bold w-full rounded">Submit Text Positions</button>
 
     <!-- Certificate form -->
-    <form id="certificate-form" action="{{ url_for('generate_certificates_preview', webinar_id=webinar.id, file=file, filename=filename) }}" method="post" enctype="multipart/form-data" class="mt-6">
+    <form id="certificate-form" action="{{ url_for('generate_certificates_preview', webinar_id=webinar.id) }}" method="post" enctype="multipart/form-data" class="mt-6">
         <input type="hidden" id="use_qr" name="use_qr" value="{{ 'true' if generate_qr else 'false' }}">
         {% if generate_qr %}
         <input type="hidden" id="qr_data" name="qr_data">
+        <input type="hidden" id="preview_width" name="preview_width">
+        <input type="hidden" id="qr_url" name="qr_url" value="{{ qr_url }}">
+        <input type="hidden" id="file_url" name="file_url" value="{{ image_url }}">
         {% endif %}
         <input type="hidden" id="text_data" name="text_data">
 
@@ -113,7 +116,6 @@ let draggingElement = null;
 let dragging = false;
 let offsetX = 0;
 let offsetY = 0;
-
 function addText() {
     const select = document.getElementById('textSelect');
     const text = select.value;
@@ -235,6 +237,7 @@ function updateQrPositionSize() {
         size: size
     };
     document.getElementById('qr_data').value = JSON.stringify(qrData);
+    document.getElementById('preview_width').value = document.getElementById('imageContainer').offsetWidth;
     const p = JSON.stringify(qrData);
     // alert(p);
 
