@@ -13,3 +13,4 @@ pdf2image
 qrcode
 requests
 cloudinary
+poppler
