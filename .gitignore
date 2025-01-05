@@ -1,0 +1,58 @@
+# macOS specific
+.DS_Store
+
+# Python environment
+*.pyc
+*.pyo
+__pycache__/
+*.pyd
+*.pdb
+*.egg
+*.egg-info/
+*.eggs/
+dist/
+build/
+*.so
+
+# Virtual environments
+venv/
+env/
+*.env
+*.venv
+.Python
+
+# Flask related
+instance/
+*.db
+*.sqlite3
+.env
+.flaskenv
+
+# IDE/editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# Logs and debug info
+*.log
+*.bak
+*.tmp
+*.old
+
+# Testing
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Other
+*.lock
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+

@@ -8,9 +8,7 @@ from string import punctuation
 import uuid
 import json
 import string
-import boto3
 import zipfile
-import pdf2image
 import io
 import requests
 import tempfile
@@ -27,7 +25,6 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from datetime import timedelta
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from flask_mail import Mail, Message
-import psycopg2
 import sqlalchemy.dialects.postgresql
 import tempfile
 import random
@@ -395,9 +392,16 @@ def generate_certificates(webinar_id):
 
         template_file = request.files['template']
         if template_file and allowed_file(template_file.filename):
-            images=pdf2image.convert_from_bytes(template_file.read())
+            pdf_bytes = template_file.read()
+
+            pdf_document = fitz.open("pdf", pdf_bytes)
+
+            first_page = pdf_document[0]
+
+            pix = first_page.get_pixmap()
+
             image_bytes = io.BytesIO()
-            images[0].save(image_bytes, format='PNG')
+            image_bytes.write(pix.tobytes("png")) 
             image_bytes.seek(0)
 
             response=cloudinary.uploader.upload(image_bytes, resource_type='image')
@@ -565,8 +569,8 @@ def generate_certificates_preview(webinar_id):
                 max_y = page_rect.height
                 for item in text_data_list:
                     text_x = item['x'] * max_x
-                    text_y = item['y'] * max_y
-                    print(text_x, text_y)
+                    text_y = item['y'] * max_y + 12
+                    # print(text_x, text_y)
                     text = item['text']
                     if text == "Serial Number":
                         serial = webinar.serial_number
@@ -725,16 +729,12 @@ def form_has_field(form, field_name):
     fields = get_form_fields(form)
     return field_name in fields
 
-# TODO: get participant whole data
 def get_specific_user_data(webinar, participants, field_name, name, email):
 
-    # All forms for the webinar
     all_forms = Form.query.filter(Form.event == webinar).all()
 
-    # Go through each participant and find the data
     found = False
     for form in all_forms:
-        # Check if the form has the desired field
         if form_has_field(form, field_name):
             submissions = Submission.query.filter_by(form_id=form.id).all()
             for submission in submissions:
@@ -746,9 +746,7 @@ def get_specific_user_data(webinar, participants, field_name, name, email):
                     if count == 1:
                         judul_email = i
                     count += 1
-                # Check if this submission matches the user
                 if data[judul_name] == name and data[judul_email] == email:
-                    # If the field is in this submission, save it
                     if field_name in data:
                         return data[field_name]
     return None
@@ -791,7 +789,6 @@ def get_participant_data(webinar, passing_grade=0):
             else:
                 temp_attended[person] = 1
     
-    # Calculate attendance percentage and determine who passed
     for person in registered:
         attendance_count = temp_attended.get(person, 0)
         total_absence_forms = len(absence_forms)
