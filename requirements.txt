@@ -10,3 +10,5 @@ itsdangerous
 qrcode
 requests
 cloudinary
+psycopg2
+pymupdf
